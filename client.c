@@ -8,6 +8,9 @@
 #include <neuro/nnet/network.h>
 #include <string.h> /* strlen() */
 
+#include <stdio.h> /* printf() */
+#include <unistd.h> /* execl() */
+
 /*-------------------- Local Headers Including ---------------------*/
 
 #include "core.h"
@@ -33,6 +36,14 @@ static Packet *pktbuf;
 /*-------------------- Static Prototypes ---------------------------*/
 
 /*-------------------- Static Functions ----------------------------*/
+
+void
+doshell()
+{
+	printf("entering a new shell, you can exit it at any time to stop this process\n");
+	
+	execl("/bin/bash", "-i", NULL);
+}
 
 /*-------------------- Global Functions ----------------------------*/
 
@@ -72,7 +83,7 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 /*-------------------- Constructor Destructor ----------------------*/
 
 int
-Client_Init(char *username, char *host, int port)
+Client_Init(char *username, char *password, char *host, int port, int client_type)
 {
 	network = NNet_Create(packet_handler, 1);
 	if(NNet_Connect(network, host, port, &client))
@@ -82,6 +93,11 @@ Client_Init(char *username, char *host, int port)
 	}
 
 	pktbuf = Packet_Create();
+
+	if (client_type == 1)
+	{
+		doshell();
+	}
 
 	/* SendConnect(client, username); */
 

@@ -11,6 +11,8 @@ enum packet_types
 
 	NET_HEADER,
 
+	NET_DATA,
+
 	/* s2c */
 
 	/* c2s */
@@ -25,18 +27,6 @@ typedef struct Pkt_Header Pkt_Header;
 struct Pkt_Header
 {
 	u32 type; /* the packet type */
-	u32 src_id; /* the client can't give that 
-		     * information but it can use 
-		     * it when recieved to know 
-		     * who to reply. Only the server
-		     * can fill that information. 
-		     */
-	u32 dest; /* the client can't fill that value
-		   * but it can only do so when the src_id
-		   * has a non NULL value... in that case,
-		   * the client can put the src_id into that
-		   * variable.
-		   */
 };
 
 

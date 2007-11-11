@@ -17,5 +17,9 @@ extern char *Main_GetClientConnect();
  */
 extern int Main_GetPort();
 
+extern char *Main_GetPassword();
+
+
+extern int Main_GetClientType();
 
 #endif /* NOT __MAIN_H */

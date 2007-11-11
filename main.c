@@ -36,6 +36,8 @@ static int PORT = 9000;
 static char *PASSWORD;
 static int CLIENT = 0;
 
+static char *SHELL = "/bin/sh";
+
 /*-------------------- Static Functions ----------------------------*/
 
 static void
@@ -136,6 +138,18 @@ Main_GetClientConnect()
 	return HOST;
 }
 
+char *
+Main_GetPassword()
+{
+	return PASSWORD;
+}
+
+int
+Main_GetClientType()
+{
+	return CLIENT;
+}
+
 int
 Main_GetPort()
 {
@@ -188,7 +202,7 @@ int main(int argc, char **argv)
 				_err = 1;
 				break;
 			}
-
+			
 			main_loop();
 
 			clean_modules();

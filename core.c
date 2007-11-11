@@ -76,13 +76,24 @@ Core_Init()
 		if (name == NULL)
 			name = "default-client";
 
-		if (Client_Init(name, Main_GetClientConnect(), Main_GetPort()))
+		if (Client_Init(name, Main_GetPassword(), 
+					Main_GetClientConnect(), 
+					Main_GetPort(),
+					Main_GetClientType()))
 			return 1;
 
 		client = 1;
 	}
 	else
 	{
+		if (Main_GetClientType())
+		{
+			NEURO_ERROR("	To have an active client, you need to input\n\
+						the IP address of a running server and\n\
+						also optionally a password.", NULL);
+			return 1;
+		}
+
 		/* we are a server */
 		NEURO_TRACE("We are a server", NULL);
 
