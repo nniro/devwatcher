@@ -36,8 +36,6 @@ static int PORT = 9000;
 static char *PASSWORD;
 static int CLIENT = 0;
 
-static char *SHELL = "/bin/sh";
-
 /*-------------------- Static Functions ----------------------------*/
 
 static void

@@ -4,6 +4,7 @@
 
 /*-------------------- Extern Headers Including --------------------*/
 #include <neuro/NEURO.h>
+#include <stdlib.h> /* getenv() */
 
 /*-------------------- Local Headers Including ---------------------*/
 #include "main.h"
@@ -74,7 +75,11 @@ Core_Init()
 		NEURO_TRACE("We are a client", NULL);
 
 		if (name == NULL)
-			name = "default-client";
+		{
+			name = getenv("USER");
+
+			NEURO_TRACE("Connecting as user %s\n", name);
+		}
 
 		if (Client_Init(name, Main_GetPassword(), 
 					Main_GetClientConnect(), 
@@ -88,7 +93,7 @@ Core_Init()
 	{
 		if (Main_GetClientType())
 		{
-			NEURO_ERROR("	To have an active client, you need to input\n\
+			NEURO_ERROR("	To act as an active client, you need to input\n\
 						the IP address of a running server and\n\
 						also optionally a password.", NULL);
 			return 1;

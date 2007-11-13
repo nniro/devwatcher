@@ -4,7 +4,7 @@ include version.mk
 
 BINARY=dwatcher
 FLAGS= -Wall -std=iso9899:1990 -pedantic -g -I/usr/local/include/neuro/nnet
-LIBS= -lneuro -lm -lneuronet
+LIBS= -lneuro -lm -lneuronet -lutil
 OBJECTS= main.o packet.o core.o server.o client.o
 GCC=gcc
 
