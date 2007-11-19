@@ -21,6 +21,8 @@
 #define __USE_POSIX 1 /* for having kill() */
 #include <signal.h> /* signal() kill() */
 
+#include <fcntl.h> /* fcntl() */
+
 #include <sys/time.h>
 #include <sys/wait.h> /* wait3() */
 /*-------------------- Local Headers Including ---------------------*/
@@ -47,6 +49,8 @@ typedef struct PTY_DATA
 /* use forks instead of spoons */
 #define USE_FORKS 1
 
+#define ALIVE_TIME 300
+
 /*-------------------- Global Variables ----------------------------*/
 
 /*-------------------- Static Variables ----------------------------*/
@@ -56,11 +60,18 @@ static CONNECT_DATA *client;
 
 static Packet *pktbuf;
 
+static int client_t;
 
 static PTY_DATA *mpty;
 
 static int child;
 static int subchild;
+
+/* time left until we send an alive packet type */
+static t_tick alive_time; 
+
+/* transfer fifo */
+static int xfer_fifo[2];
 
 /*-------------------- Static Prototypes ---------------------------*/
 
@@ -69,7 +80,6 @@ static int subchild;
 static void
 done()
 {
-	NEURO_TRACE("Child finished", NULL);
 	if (subchild)
 	{
 		close(mpty->master);
@@ -77,7 +87,7 @@ done()
 	else
 	{
 		tcsetattr(0, TCSAFLUSH, &mpty->tt);
-		printf("program execution finished\n");
+		printf("program execution finished PID %d\n", getpid());
 	}
 
 	exit(0);
@@ -98,7 +108,7 @@ finish(int dummy)
 			die = 1;
 	}
 
-	printf("pid %d ppid %d child %d\n", getpid(), getppid(), child);
+	printf("pid %d ppid %d child %d exit status %d\n", getpid(), getppid(), child, status);
 	NEURO_TRACE("SIGCHLD %d", pid);
 	if (die)
 		done();
@@ -144,11 +154,17 @@ doinput()
 	register int c;
 	char buf[BUFSIZ];
 
+
+	/*close(xfer_fifo[0]);*/
+
 	while((c = read(0, buf, BUFSIZ)) > 0)
 	{
 		/* NEURO_WARN("herein", NULL); */
 		write(mpty->master, buf, c);
+
+		/* write(xfer_fifo[1], buf, c); */
 	}
+	printf("%s() DONE\n", __FUNCTION__);
 
 	done();
 }
@@ -179,14 +195,16 @@ dooutput()
 {
 	register int c;
 	char buf[BUFSIZ];
-	FILE *fname;
+	/*FILE *fname;*/
 
 	/* we close stdin */
 	close(0); 
 	/* we close slave */
 	close(mpty->slave);
 
-	fname = fopen("houba", "w");
+	/* fname = fopen("houba", "w"); */
+
+	close(xfer_fifo[0]);
 
 	while (1 != 2)
 	{
@@ -197,12 +215,18 @@ dooutput()
 
 		/* printf("herein\n"); */
 		write(1, buf, c);
-		/*fwrite(buf, 1, c, fname);
 
-		fflush(fname);*/
+		write(xfer_fifo[1], buf, c);
+
+
+		/* fwrite(buf, 1, c, fname); */
+		/*fflush(fname);*/
+
+
 	}
 
-	fclose(fname);
+	close(xfer_fifo[1]);
+	/* fclose(fname); */
 
 	done();
 }
@@ -258,22 +282,6 @@ dopty()
 }
 
 static int
-dofork()
-{
-	int child = 0;
-
-	child = fork();
-
-	if (child < 0)
-	{
-		NEURO_ERROR("Creation of fork failed", NULL);
-		return -1;
-	}
-
-	return child;
-}
-
-static int
 doshell()
 {
 	/* starts a new session */
@@ -304,6 +312,25 @@ doshell()
 	return 0;
 }
 
+static void
+SendConnect(char *username, char *password, int client_type)
+{
+	Pkt_Connect connect;
+
+	if (username)
+		strncpy(connect.name, username, 32);
+
+	if (password)
+		strncpy(connect.password, password, 32);
+
+	connect.client_type = client_type;
+
+	Packet_Push32(pktbuf, NET_CONNECT);
+	Packet_PushStruct(pktbuf, sizeof(Pkt_Connect), &connect);
+
+	NNet_Send(client, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
+}
+
 /*-------------------- Global Functions ----------------------------*/
 
 /*-------------------- Poll -------------------------*/
@@ -311,11 +338,58 @@ doshell()
 void
 Client_Poll()
 {
-	if (USE_FORKS == 0)
+	if (client_t)
 	{
-		dooutput2();
+		if (USE_FORKS == 0)
+		{
+			dooutput2();
 
-		doinput2();
+			doinput2();
+		}
+		else
+		{
+			char buf[BUFSIZ];
+			char *buffer;
+			register int c, i, t;
+
+			while ((c = read(xfer_fifo[0], buf, sizeof(buf))) > 0)
+			{
+				buffer = &buf[0];
+
+				t = 0;
+				while (c > 0)
+				{
+					if (c > 256)
+						i = 256;
+					else
+						i = c;
+
+					t += i;
+
+					c -= i;
+
+					Packet_Reset(pktbuf);
+
+					Packet_Push32(pktbuf, NET_DATA);
+					Packet_Push32(pktbuf, i);
+					Packet_PushString(pktbuf, i, buffer);
+
+					NNet_Send(client, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
+					if (c)
+						buffer = &buf[t];
+				}
+			}
+		}
+	}
+
+	if (alive_time < Neuro_GetTickCount())
+	{
+		alive_time = Neuro_GetTickCount() + ALIVE_TIME;
+		Packet_Reset(pktbuf);
+
+		Packet_Push32(pktbuf, NET_ALIVE);
+
+		NNet_Send(client, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
 	}
 }
 
@@ -325,13 +399,34 @@ static int
 packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 {
 	Pkt_Header *whole;
+	void *buffer;
 
 	whole = (Pkt_Header*)data;
 
-
+	buffer = &whole[1];
 
 	switch (whole->type)
-	{	
+	{
+		case NET_DATA:
+		{
+			char *buf;
+			int *length;
+
+			length = buffer;
+			buf = (char*)&length[1];
+
+			/* printf("recieved len %d, data len %d\n", len, *length); */
+
+			write(1, buf, *length);
+		}
+		break;
+
+		case NET_ALIVE:
+		{
+
+		}
+		break;
+
 		default:
 		{
 			NEURO_WARN("Unhandled packet type recieved -- type %d", whole->type);
@@ -360,6 +455,15 @@ Client_Init(char *username, char *password, char *host, int port, int client_typ
 
 	if (client_type == 1)
 	{
+
+		/* FIXME hardcoded */
+		if (pipe(xfer_fifo))
+		{
+			NEURO_ERROR("Pipe creation failure", NULL);
+			return 1;
+		}
+		/* FIXME end hardcoded */
+
 		mpty = dopty();
 
 		if (!mpty)
@@ -372,6 +476,7 @@ Client_Init(char *username, char *password, char *host, int port, int client_typ
 
 		if (USE_FORKS)
 		{
+
 			signal(SIGCHLD, finish);
 
 			/* we create 2 forks, one acts as a new shell and the other 
@@ -381,7 +486,7 @@ Client_Init(char *username, char *password, char *host, int port, int client_typ
 			 * and child > 0 runs the new shell
 			 */
 
-			child = dofork();
+			child = fork();
 
 			if (child < 0)
 			{
@@ -389,27 +494,27 @@ Client_Init(char *username, char *password, char *host, int port, int client_typ
 				return 1;
 			}
 
-			NEURO_TRACE("CHILD %d", child);
-			if (child > 0)
+			/* printf("CHILD %d\n", getpid()); */
+			if (child == 0)
 			{
 				child = fork();
 
-				NEURO_TRACE("CHILD2 %d", child);
+				/* printf("CHILD2 %d\n", getpid()); */
 				if (child == 0)
 				{
 					subchild = child = fork();
 
-					NEURO_TRACE("CHILD3 %d", child);
+					/* printf("CHILD3 %d\n", getpid()); */
 					if (child == 0)
 						doshell();
 					else
 						dooutput();
 				}
-				else
-					signal(SIGWINCH, resize);
 
 				doinput();
 			}
+			else
+				signal(SIGWINCH, resize);
 		}
 		else
 		{
@@ -426,9 +531,17 @@ Client_Init(char *username, char *password, char *host, int port, int client_typ
 			if (child > 0)
 				doshell();
 		}
+
+		fcntl(xfer_fifo[0], F_SETFL, O_NONBLOCK);
+		close(xfer_fifo[1]);
+	}
+	else
+	{
 	}
 
-	/* SendConnect(client, username); */
+	client_t = client_type;
+
+	SendConnect(username, password, client_type);
 
 	return 0;
 }
@@ -437,6 +550,8 @@ void
 Client_Clean()
 {
 	Packet_Destroy(pktbuf);
+
+	close(xfer_fifo[0]);
 
 	if (mpty)
 	{

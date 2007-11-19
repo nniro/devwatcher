@@ -48,7 +48,7 @@ int
 Core_Poll()
 {
 
-	NEURO_TRACE("core cycle", NULL);
+	/* NEURO_TRACE("core cycle", NULL); */
 
 	if (NNet_Poll())
 		return 1;
@@ -75,7 +75,7 @@ Core_Init()
 		char *name = Main_GetClientName();
 
 		/* we are a client */
-		NEURO_TRACE("We are a client", NULL);
+		NEURO_TRACE("We are a client %d", Main_GetClientType());
 
 		if (name == NULL)
 		{
@@ -105,7 +105,7 @@ Core_Init()
 		/* we are a server */
 		NEURO_TRACE("We are a server", NULL);
 
-		if (Server_Init(Main_GetPort()))
+		if (Server_Init(Main_GetPassword(), Main_GetPort()))
 			return 1;
 	}
 

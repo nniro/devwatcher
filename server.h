@@ -9,7 +9,7 @@
 #include "global.h"
 
 extern void Server_Poll();
-extern int Server_Init(int port);
+extern int Server_Init(char *password, int port);
 extern void Server_Clean();
 
 #endif /* NOT __SERVER_H */
