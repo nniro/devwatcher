@@ -154,16 +154,9 @@ doinput()
 	register int c;
 	char buf[BUFSIZ];
 
-
-	/*close(xfer_fifo[0]);*/
-
 	while((c = read(0, buf, BUFSIZ)) > 0)
-	{
-		/* NEURO_WARN("herein", NULL); */
 		write(mpty->master, buf, c);
 
-		/* write(xfer_fifo[1], buf, c); */
-	}
 	printf("%s() DONE\n", __FUNCTION__);
 
 	done();
@@ -335,6 +328,8 @@ SendConnect(char *username, char *password, int client_type)
 
 /*-------------------- Poll -------------------------*/
 
+static FILE *log;
+
 void
 Client_Poll()
 {
@@ -354,15 +349,18 @@ Client_Poll()
 
 			while ((c = read(xfer_fifo[0], buf, sizeof(buf))) > 0)
 			{
-				buffer = &buf[0];
+				buffer = buf;
 
 				t = 0;
+				i = c;
 				while (c > 0)
 				{
-					if (c > 256)
-						i = 256;
-					else
-						i = c;
+					i = c;
+					if (i > 500)
+						i = 500;
+
+					fprintf(log, "c %d i %d t %d --> buffer \"%s\"\n", c, i, t, buffer);
+					fflush(log);
 
 					t += i;
 
@@ -375,9 +373,11 @@ Client_Poll()
 					Packet_PushString(pktbuf, i, buffer);
 
 					NNet_Send(client, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
-					if (c)
-						buffer = &buf[t];
+					buffer = &buf[t];
 				}
+
+				/* temporarily... this is not necessary */
+				memset(buf, 0, t);
 			}
 		}
 	}
@@ -415,6 +415,11 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 			length = buffer;
 			buf = (char*)&length[1];
 
+			fprintf(log, "got [%d]: \"", *length);
+			fwrite(buf, *length, 1, log);
+			fprintf(log, "\"\n");
+			fflush(log);
+
 			/* printf("recieved len %d, data len %d\n", len, *length); */
 
 			write(1, buf, *length);
@@ -451,10 +456,14 @@ Client_Init(char *username, char *password, char *host, int port, int client_typ
                 return 1;
 	}
 
+	NNet_SetTimeout(client, 0);
+
 	pktbuf = Packet_Create();
 
 	if (client_type == 1)
 	{
+
+		log = fopen("log_file", "w");
 
 		/* FIXME hardcoded */
 		if (pipe(xfer_fifo))
@@ -537,6 +546,7 @@ Client_Init(char *username, char *password, char *host, int port, int client_typ
 	}
 	else
 	{
+		log = fopen("log_file2", "w");
 	}
 
 	client_t = client_type;

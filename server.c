@@ -159,7 +159,13 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 
 		case NET_DATA:
 		{
-			/* printf("got DATA %d %d\n", conn, hc_aclient); */
+			int *tmp;
+			char *bufa;
+
+			tmp = buffer;
+			bufa = (char*)&tmp[1];
+
+			printf("%c%c", bufa[0], bufa[1]);
 			/* FIXME hardcode */
 			if (conn == hc_aclient)
 			{
