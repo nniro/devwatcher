@@ -21,17 +21,31 @@
 
 NEURO_MODULE_CHANNEL("server");
 
+typedef struct CList CList;
+
 struct CList
 {
-	CONNECT_DATA *client;
 	u8 client_type; /* 0 is passive, 1 is active */
 	char name[32];
 
+	CONNECT_DATA *client; /* for active and passive clients, this is the pointer to the connection */
+	CONNECT_DATA *audit; /* for passive clients, this is the pointer to an active connection. */
+
 	/* sessions (layers of active clients that a passive client can watch) */
+	EBUF *sessions; /* contains Session type of elements */
 
 };
 
-typedef struct CList CList;
+typedef struct Session Session;
+
+struct Session
+{
+	/* each session need statistics like buffer size, how much bytes transfered 
+	 * and how long since the last change. All this for the list query packet.
+	 */
+
+	CONNECT_DATA *session;
+};
 
 /*-------------------- Global Variables ----------------------------*/
 
@@ -118,11 +132,6 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 				{
 					printf("client GRANTED ");
 					printf("active access to broadcasting server\n");
-
-
-					/* FIXME hardcode */
-					hc_aclient = conn;
-					/* FIXME end hardcode */
 				}
 				else
 				{
@@ -131,6 +140,19 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 					return 1;
 				}
 			}
+
+			/* FIXME hardcode */
+			if (connect->client_type == 1)
+			{
+				if (hc_aclient)
+				{
+					printf("hardcoded hack code -- access denied\n");
+					return 1;
+				}
+
+				hc_aclient = conn;
+			}
+			/* FIXME end hardcode */
 
 			Neuro_AllocEBuf(client_list, sizeof(CList*), sizeof(CList));
 

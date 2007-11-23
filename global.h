@@ -20,6 +20,7 @@ enum packet_types
 	/* c2s */
 	NET_CONNECT,
 	NET_QLIST, /* query list */
+	NET_SELECT, /* select which element in the list to listen to. */
 
 	NET_END
 };

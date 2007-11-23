@@ -356,8 +356,8 @@ Client_Poll()
 				while (c > 0)
 				{
 					i = c;
-					if (i > 500)
-						i = 500;
+					if (i > 200)
+						i = 200;
 
 					fprintf(log, "c %d i %d t %d --> buffer \"%s\"\n", c, i, t, buffer);
 					fflush(log);
