@@ -1,5 +1,7 @@
 /* server.c
  * Module : Server_
+ *
+ * the server module of the project
  */
 
 /*-------------------- Extern Headers Including --------------------*/
@@ -67,6 +69,112 @@ static CONNECT_DATA *hc_aclient;
 
 /*-------------------- Static Functions ----------------------------*/
 
+/* piece of code that checks if an element still exists or not then calls 
+ * the necessary instructions to effectively clean the data.
+ *
+ * FIXME : when an active layer (active-layer) is cleaned off, we also need to
+ * loop passive connections that are auditing it to make them disconnect nicely.
+ */
+static int
+clist_check_zombie(CList *elem)
+{
+
+	if (elem->client_type == 1)
+	{
+		Session *buf;
+		u32 total = 0;
+
+		if (Neuro_EBufIsEmpty(elem->sessions))
+		{
+			NEURO_TRACE("Disconnecting a zombie active-parent connection's data", NULL);
+
+			Neuro_SCleanEBuf(client_list, elem);
+
+			return 1;
+		}
+
+		total = Neuro_GiveEBufCount(elem->sessions) + 1;
+
+		while (total-- > 0)
+		{
+			buf = Neuro_GiveEBuf(elem->sessions, total);
+
+			if (NNet_ClientExist2(network, buf->session) == 0)
+			{
+				NEURO_TRACE("Disconnecting a zombie active-layer connection's data", NULL);
+
+				/* in case of an active client's layer, we need to remove the session 
+				 * element from the username only and not the whole element.
+				 */
+
+
+				Neuro_SCleanEBuf(elem->sessions, buf);
+
+				return 1;
+			}
+		}
+	}
+	else
+	{
+		if (NNet_ClientExist2(network, elem->client) == 0)
+		{
+			NEURO_TRACE("Disconnecting a zombie passive connection's data", NULL);
+
+			/* in case of an active client's layer, we need to remove the session 
+			 * element from the username only and not the whole element.
+			 */
+
+
+			Neuro_SCleanEBuf(client_list, elem);
+
+			return 1;
+		}
+	}
+	return 0;
+}
+
+/* outputs a pointer to a CList element that corresponds to an username. */
+static CList*
+clist_getD_from_name(char *name)
+{
+	u32 total = 0;
+	CList *buf;
+
+	if (Neuro_EBufIsEmpty(client_list))
+		return NULL;
+
+	total = Neuro_GiveEBufCount(client_list) + 1;
+
+        while (total-- > 0)
+        {
+		buf = Neuro_GiveEBuf(client_list, total);
+
+		if (clist_check_zombie(buf))
+			continue;
+
+		if (!strcmp(buf->name, name))
+		{
+			return buf;
+		}
+        }
+
+	return NULL;
+}
+
+static void
+clean_clist(void *src)
+{
+	CList *tmp;
+
+	tmp = (CList*)src;
+
+	if (tmp)
+	{
+		if (tmp->sessions)
+			Neuro_CleanEBuf(&tmp->sessions);
+	}
+}
+
 /*-------------------- Global Functions ----------------------------*/
 
 /*-------------------- Poll ------------------------*/
@@ -86,14 +194,8 @@ Server_Poll()
         {
 		buf = Neuro_GiveEBuf(client_list, total);
 
-		if (NNet_ClientExist2(network, buf->client) == 0)
-		{
-			NEURO_TRACE("Disconnecting a zombie connection's data", NULL);
-			Neuro_SCleanEBuf(client_list, buf);
-
+		if (clist_check_zombie(buf))
 			continue;
-		}
-	
         }
 }
 
@@ -116,7 +218,8 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 		case NET_CONNECT:
 		{
 			Pkt_Connect *connect;
-			CList *buf;
+			Session *session;
+			CList *buf = NULL;
 
 			connect = buffer;
 
@@ -141,9 +244,10 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 				}
 			}
 
-			/* FIXME hardcode */
 			if (connect->client_type == 1)
 			{
+
+				/* FIXME hardcode */
 				if (hc_aclient)
 				{
 					printf("hardcoded hack code -- access denied\n");
@@ -151,15 +255,41 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 				}
 
 				hc_aclient = conn;
+				/* FIXME end hardcode */
+
+
+				if (connect->name)
+				{
+					buf = clist_getD_from_name(connect->name);
+				}
+
 			}
-			/* FIXME end hardcode */
 
-			Neuro_AllocEBuf(client_list, sizeof(CList*), sizeof(CList));
+			if (!buf)
+			{
+				Neuro_AllocEBuf(client_list, sizeof(CList*), sizeof(CList));
 
-			buf = Neuro_GiveCurEBuf(client_list);
+				buf = Neuro_GiveCurEBuf(client_list);
 
-			buf->client = conn;
-			buf->client_type = connect->client_type;
+				/* this will probably be removed eventually -- at least for 
+				 * active clients.
+				 */
+				buf->client = conn;
+
+				buf->client_type = connect->client_type;
+
+			}
+
+			if (Neuro_EBufIsEmpty(buf->sessions))
+			{
+				Neuro_CreateEBuf(&buf->sessions);
+			}
+
+			Neuro_AllocEBuf(buf->sessions, sizeof(Session*), sizeof(Session));
+
+			session = Neuro_GiveCurEBuf(buf->sessions);
+
+			session->session = conn;
 
 			if (connect->name)
 			{
@@ -187,7 +317,7 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 			tmp = buffer;
 			bufa = (char*)&tmp[1];
 
-			printf("%c%c", bufa[0], bufa[1]);
+			/* printf("%c%c", bufa[0], bufa[1]); */
 			/* FIXME hardcode */
 			if (conn == hc_aclient)
 			{
@@ -203,13 +333,8 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 				{
 					buf = Neuro_GiveEBuf(client_list, total);
 
-					if (NNet_ClientExist2(network, buf->client) == 0)
-					{
-						NEURO_TRACE("Disconnecting a zombie connection's data", NULL);
-						Neuro_SCleanEBuf(client_list, buf);
-
+					if (clist_check_zombie(buf))
 						continue;
-					}
 					
 					if (!buf->client_type)
 					{
@@ -248,6 +373,7 @@ Server_Init(char *password, int port)
 	}
 
 	Neuro_CreateEBuf(&client_list);
+	Neuro_SetcallbEBuf(client_list, clean_clist);
 
 	pktbuf = Packet_Create();
 

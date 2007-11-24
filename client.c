@@ -359,6 +359,7 @@ Client_Poll()
 					if (i > 200)
 						i = 200;
 
+					/* write an output to a file called log_file to debug the packets sent to the server. */
 					fprintf(log, "c %d i %d t %d --> buffer \"%s\"\n", c, i, t, buffer);
 					fflush(log);
 
@@ -371,6 +372,11 @@ Client_Poll()
 					Packet_Push32(pktbuf, NET_DATA);
 					Packet_Push32(pktbuf, i);
 					Packet_PushString(pktbuf, i, buffer);
+
+					if (Packet_GetLen(pktbuf) > (4 + 4 + i))
+					{
+						NEURO_ERROR("Packet bigger than it should by %d bytes", Packet_GetLen(pktbuf) - 200);
+					}
 
 					NNet_Send(client, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
 					buffer = &buf[t];
@@ -415,6 +421,7 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 			length = buffer;
 			buf = (char*)&length[1];
 
+			/* write an output to a file called log_file2 to see the packets that the passive client recieves. */
 			fprintf(log, "got [%d]: \"", *length);
 			fwrite(buf, *length, 1, log);
 			fprintf(log, "\"\n");
