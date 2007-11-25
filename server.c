@@ -46,7 +46,20 @@ struct Session
 	 * and how long since the last change. All this for the list query packet.
 	 */
 
+	char *summary;
+	char *description;
+
 	CONNECT_DATA *session;
+
+	/* list of passive clients that listen that session */
+	EBUF *listeners; /* contains Listener elements */
+};
+
+typedef struct Listener Listener;
+
+struct Listener
+{
+	CONNECT_DATA *client;
 };
 
 /*-------------------- Global Variables ----------------------------*/
@@ -62,8 +75,10 @@ static Packet *pktbuf;
 /* main server password */
 static char *server_password;
 
+#if hardcode
 /* HACK hardcoding FIXME */ 
 static CONNECT_DATA *hc_aclient;
+#endif /* hardcode */
 
 /*-------------------- Static Prototypes ---------------------------*/
 
@@ -215,6 +230,62 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 
         switch (whole->type)
         {
+		case NET_QLIST:
+		{
+			u32 total = 0;
+			CList *buf;
+
+			/* info on all the active clients and their layers.
+			 *
+			 * see Pkt_List in global.h
+			 */
+			
+			Packet_Reset(pktbuf);
+
+			if (Neuro_EBufIsEmpty(client_list))
+				return 0;
+
+			
+			Packet_Push32(pktbuf, NET_LIST);
+
+			total = Neuro_GiveEBufCount(client_list) + 1;
+
+			while (total-- > 0)
+			{
+				buf = Neuro_GiveEBuf(client_list, total);
+
+				if (clist_check_zombie(buf))
+					continue;
+				
+				if (buf->client_type == 1)
+				{
+					u32 amount = 0;
+
+					Packet_PushString(pktbuf, 32, buf->name);
+					
+					if (!Neuro_EBufIsEmpty(buf->sessions))
+						amount = Neuro_GiveEBufCount(buf->sessions) + 1;
+
+					Packet_Push32(pktbuf, amount);
+
+					/* also push a struct with more in depth informations 
+					 * about the layers.
+					 */
+
+					NNet_Send(conn, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
+					Packet_Reset(pktbuf);
+
+				}
+			}
+
+			Packet_Reset(pktbuf);
+
+			Packet_Push32(pktbuf, NET_DISCONNECT);
+			
+			NNet_Send(conn, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
+		}
+		break;
+
 		case NET_CONNECT:
 		{
 			Pkt_Connect *connect;
@@ -246,7 +317,7 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 
 			if (connect->client_type == 1)
 			{
-
+#if hardcode
 				/* FIXME hardcode */
 				if (hc_aclient)
 				{
@@ -256,6 +327,7 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 
 				hc_aclient = conn;
 				/* FIXME end hardcode */
+#endif /* hardcode */
 
 
 				if (connect->name)
@@ -305,7 +377,7 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 
 			Packet_Push32(pktbuf, NET_ALIVE);
 
-			NNet_Send(conn, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));		
+			NNet_Send(conn, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
 		}
 		break;
 
@@ -317,6 +389,7 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 			tmp = buffer;
 			bufa = (char*)&tmp[1];
 
+#if hardcode
 			/* printf("%c%c", bufa[0], bufa[1]); */
 			/* FIXME hardcode */
 			if (conn == hc_aclient)
@@ -338,12 +411,15 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 					
 					if (!buf->client_type)
 					{
+						if (len >= 512)
+							printf("-- Packet size too big %d\n", len);
 						/* printf("forwarding data len %d\n", len); */
 						NNet_Send(buf->client, data, len);
 					}
 				}
 			}
 			/* FIXME end hardcode */
+#endif /* hardcode */
 		}
 		break;
 

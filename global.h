@@ -16,6 +16,7 @@ enum packet_types
 
 	/* s2c */
 	NET_LIST, /* send list */
+	NET_DISCONNECT, /* disconnects a client */
 
 	/* c2s */
 	NET_CONNECT,
@@ -42,6 +43,32 @@ struct Pkt_Connect
 	char password[32];
 	u8 client_type;
 	char version[8];
+};
+
+typedef struct Pkt_Select Pkt_Select;
+
+struct Pkt_Select
+{
+	char name[32];
+	u32 layer;
+};
+
+typedef struct Pkt_List Pkt_List;
+
+struct Pkt_List
+{
+	char name[32];
+	u32 layers; /* the amount of layers */
+	struct
+	{
+		u32 listeners; /* the amount of listeners */
+
+		u32 summary_len;
+		char *summary;
+
+		u32 description_len;
+		char *description;
+	}layer;
 };
 
 #endif /* NOT __GLOBAL_H */

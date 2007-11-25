@@ -318,6 +318,8 @@ SendConnect(char *username, char *password, int client_type)
 
 	connect.client_type = client_type;
 
+	Packet_Reset(pktbuf);
+
 	Packet_Push32(pktbuf, NET_CONNECT);
 	Packet_PushStruct(pktbuf, sizeof(Pkt_Connect), &connect);
 
@@ -356,8 +358,8 @@ Client_Poll()
 				while (c > 0)
 				{
 					i = c;
-					if (i > 200)
-						i = 200;
+					if (i > 300)
+						i = 300;
 
 					/* write an output to a file called log_file to debug the packets sent to the server. */
 					fprintf(log, "c %d i %d t %d --> buffer \"%s\"\n", c, i, t, buffer);
@@ -436,6 +438,23 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 		case NET_ALIVE:
 		{
 
+		}
+		break;
+
+		case NET_DISCONNECT:
+		{
+			printf("Disconnection packet recieved from server... bailing out\n");
+			return 1;
+		}
+		break;
+
+		case NET_LIST:
+		{
+			Pkt_List *buf;
+
+			buf = buffer;
+
+			printf("Active client %s -- Sessions %d\n", buf->name, buf->layers);
 		}
 		break;
 
@@ -554,6 +573,17 @@ Client_Init(char *username, char *password, char *host, int port, int client_typ
 	else
 	{
 		log = fopen("log_file2", "w");
+	
+		/* we send a packet to get
+		 * the list of active sessions 
+		 * currently on the server. 
+		 */
+		Packet_Push32(pktbuf, NET_QLIST);
+
+		NNet_Send(client, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
+
+
+		return 0;
 	}
 
 	client_t = client_type;
