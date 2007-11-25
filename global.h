@@ -40,7 +40,8 @@ typedef struct Pkt_Connect Pkt_Connect;
 struct Pkt_Connect
 {
 	char name[32];
-	char password[32];
+	u32 layer; /* for passive clients only */
+	char password[32]; /* for active clients only */
 	u8 client_type;
 	char version[8];
 };

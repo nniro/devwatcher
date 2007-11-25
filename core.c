@@ -87,8 +87,11 @@ Core_Init()
 		if (Client_Init(name, Main_GetPassword(), 
 					Main_GetClientConnect(), 
 					Main_GetPort(),
+					Main_GetLayer(),
 					Main_GetClientType()))
+		{
 			return 1;
+		}
 
 		client = 1;
 	}

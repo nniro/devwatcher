@@ -473,7 +473,7 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 /*-------------------- Constructor Destructor ----------------------*/
 
 int
-Client_Init(char *username, char *password, char *host, int port, int client_type)
+Client_Init(char *username, char *password, char *host, int port, int layer, int client_type)
 {
 	network = NNet_Create(packet_handler, 1);
 	if(NNet_Connect(network, host, port, &client))

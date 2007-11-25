@@ -17,6 +17,9 @@ extern char *Main_GetClientConnect();
  */
 extern int Main_GetPort();
 
+extern int Main_GetLayer();
+
+
 extern char *Main_GetPassword();
 
 

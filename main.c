@@ -35,6 +35,7 @@ static char *HOST;
 static int PORT = 9000;
 static char *PASSWORD;
 static int CLIENT = 0;
+static int LAYER = 0;
 
 /*-------------------- Static Functions ----------------------------*/
 
@@ -79,15 +80,27 @@ set_client(char *data)
 }
 
 static void
+set_layer(char *data)
+{
+	if (data)
+	{
+		LAYER = atoi(data);
+	}
+}
+
+static void
 outputhelp(char *data)
 {
-	printf("Usage: devw [OPTION]... [SERVER]\n");
-	printf("this program is used as a client/server to enable developers to watch what\n");
-	printf("other fellow developers are working on.\n");
+	printf("Usage: dwatcher [OPTIONS]... [SERVER]\n");
+	printf("this program is a tool used to broadcast a shell to a server\n");
+	printf("which can then be watched by other people.\n");
 	printf("-h, --help		Displays this help\n");
 	printf("-v, --version		Displays the version information.\n");
 	printf("-a, --active		Sends terminal data to the server to be broadcasted.\n");
 	printf("-p, --port		Sets the port the client will use to connect.\n");
+	printf("-n, --name		Sets the name of the active client for a setting,\n");
+	printf("			a query(passive) or a connection(passive).\n");
+	printf("-l, --layer		as a passive client, connect to this layer\n");
 	printf("-s, --password		Sets the password to be sent to the server when we\n");
 	printf("			are an active client. And sets the server password when\n");
 	printf("			we are a server.\n");
@@ -97,8 +110,8 @@ outputhelp(char *data)
 static void
 outputversion(char *data)
 {
-	printf("devw (developers watcher) %s\n", VERSION);
-	printf("Written by Nicholas Niro and Joe LeBlanc\n\n");
+	printf("dwatcher (developers watcher) %s\n", VERSION);
+	printf("Written by Nicholas Niro\n\n");
 	printf("Copyright (C) 2007 Neuroponic, Inc.\n");
 	printf("This is free software; see the source for copying conditions. There is NO\n");
 	printf("warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n");
@@ -154,13 +167,19 @@ Main_GetPort()
 	return PORT;
 }
 
+int
+Main_GetLayer()
+{
+	return LAYER;
+}
+
 /*-------------------- Main Loop ----------------------------------------*/
 
 void
 main_loop()
 {
 
-	while( running )
+	while (running)
 	{
 		if (Core_Poll())
 			running = 0;
@@ -182,8 +201,13 @@ int main(int argc, char **argv)
 	Neuro_ArgOption(NULL, OPTION_NORMAL, toconnect);
 	Neuro_ArgOption("p,port", OPTION_ARGUMENT, set_port);
 	Neuro_ArgOption("n,name", OPTION_ARGUMENT, set_name);
+	Neuro_ArgOption("l,layer", OPTION_ARGUMENT, set_layer);
 	Neuro_ArgOption("s,password", OPTION_ARGUMENT, set_password);
 	Neuro_ArgOption("a,active", OPTION_NORMAL, set_client);
+	/*
+	Neuro_ArgOption("s,summary", OPTION_NORMAL, set_summary);
+	Neuro_ArgOption("d,description", OPTION_NORMAL, set_description);
+	*/
 
 
 	_err = Neuro_ArgProcess();

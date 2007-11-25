@@ -11,7 +11,7 @@
 extern void Client_SendPacket(CONNECT_DATA *client, char *data, u32 len);
 
 extern void Client_Poll();
-extern int Client_Init(char *username, char *password, char *host, int port, int client_type);
+extern int Client_Init(char *username, char *password, char *host, int port, int layer, int client_type);
 
 extern void Client_Clean();
 

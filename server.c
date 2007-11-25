@@ -239,14 +239,15 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 			 *
 			 * see Pkt_List in global.h
 			 */
-			
-			Packet_Reset(pktbuf);
 
 			if (Neuro_EBufIsEmpty(client_list))
-				return 0;
+			{
+				Packet_Reset(pktbuf);
+				Packet_Push32(pktbuf, NET_DISCONNECT);
+				NNet_Send(conn, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
 
-			
-			Packet_Push32(pktbuf, NET_LIST);
+				return 0;
+			}
 
 			total = Neuro_GiveEBufCount(client_list) + 1;
 
@@ -261,6 +262,10 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 				{
 					u32 amount = 0;
 
+					Packet_Reset(pktbuf);
+					
+					Packet_Push32(pktbuf, NET_LIST);
+					
 					Packet_PushString(pktbuf, 32, buf->name);
 					
 					if (!Neuro_EBufIsEmpty(buf->sessions))
@@ -273,15 +278,11 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 					 */
 
 					NNet_Send(conn, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
-					Packet_Reset(pktbuf);
-
 				}
 			}
 
 			Packet_Reset(pktbuf);
-
 			Packet_Push32(pktbuf, NET_DISCONNECT);
-			
 			NNet_Send(conn, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
 		}
 		break;
