@@ -190,6 +190,19 @@ clean_clist(void *src)
 	}
 }
 
+static void
+Handle_Session(CList *lst, CONNECT_DATA *conn, char *data, u32 len)
+{
+	u32 total = 0;
+
+	if (Neuro_EBufIsEmpty(lst->sessions))
+	{
+		return;
+	}
+
+
+}
+
 /*-------------------- Global Functions ----------------------------*/
 
 /*-------------------- Poll ------------------------*/
@@ -202,7 +215,7 @@ Server_Poll()
 
 	if (Neuro_EBufIsEmpty(client_list))
 		return;
-
+}
 	total = Neuro_GiveEBufCount(client_list) + 1;
 
         while (total-- > 0)
@@ -301,23 +314,25 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 				return 1;
 			}
 
-			if (server_password && connect->client_type == 1)
-			{
-				if (!strcmp(server_password, connect->password))
-				{
-					printf("client GRANTED ");
-					printf("active access to broadcasting server\n");
-				}
-				else
-				{
-					printf("client DENIED ");
-					printf("active access to broadcasting server\n");
-					return 1;
-				}
-			}
-
 			if (connect->client_type == 1)
 			{
+				/* an active client */
+
+				if (server_password)
+				{
+					if (!strcmp(server_password, connect->password))
+					{
+						printf("client GRANTED ");
+						printf("active access to broadcasting server\n");
+					}
+					else
+					{
+						printf("client DENIED ");
+						printf("active access to broadcasting server\n");
+						return 1;
+					}
+				}
+
 #if hardcode
 				/* FIXME hardcode */
 				if (hc_aclient)
@@ -330,44 +345,98 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 				/* FIXME end hardcode */
 #endif /* hardcode */
 
-
 				if (connect->name)
 				{
 					buf = clist_getD_from_name(connect->name);
 				}
 
+				if (!buf)
+				{
+					Neuro_AllocEBuf(client_list, sizeof(CList*), sizeof(CList));
+
+					buf = Neuro_GiveCurEBuf(client_list);
+
+					/* this will probably be removed eventually -- at least for 
+					 * active clients.
+					 */
+					buf->client = conn;
+
+					buf->client_type = connect->client_type;
+
+				}
+
+				if (Neuro_EBufIsEmpty(buf->sessions))
+				{
+					Neuro_CreateEBuf(&buf->sessions);
+				}
+
+				Neuro_AllocEBuf(buf->sessions, sizeof(Session*), sizeof(Session));
+
+				session = Neuro_GiveCurEBuf(buf->sessions);
+
+				session->session = conn;
+
+				if (connect->name)
+				{
+					strncpy(buf->name, connect->name, 32);
+					printf("Connection from client %s type %d\n", buf->name, buf->client_type);
+				}
+
 			}
-
-			if (!buf)
+			else
 			{
-				Neuro_AllocEBuf(client_list, sizeof(CList*), sizeof(CList));
+				int _err = 0;
+				CList *buf = NULL;
 
-				buf = Neuro_GiveCurEBuf(client_list);
+				/* a passive client */
+				if (connect->name)
+				{
+					buf = clist_getD_from_name(connect->name);
+				}
+				else
+					_err += 1;
 
-				/* this will probably be removed eventually -- at least for 
-				 * active clients.
-				 */
-				buf->client = conn;
+				if (buf)
+				{
+					if (connect->layer > 0)
+					{
+						Session *sess;
+						Listener *bufa;
 
-				buf->client_type = connect->client_type;
+						if (Neuro_EBufIsEmpty(buf->sessions))
+						{
+							sess = Neuro_GiveEBuf(buf->sessions, connect->layer - 1);
 
-			}
+							if (sess)
+							{
+								Neuro_AllocEBuf(sess->listeners, sizeof(Listener*), sizeof(Listener));
 
-			if (Neuro_EBufIsEmpty(buf->sessions))
-			{
-				Neuro_CreateEBuf(&buf->sessions);
-			}
+								bufa = Neuro_GiveCurEBuf(sess->listeners);
 
-			Neuro_AllocEBuf(buf->sessions, sizeof(Session*), sizeof(Session));
+								bufa->client = conn;
+							}
+							else
+								_err += 1;
+						}
+						else
+							_err += 1;
 
-			session = Neuro_GiveCurEBuf(buf->sessions);
+					}
+					else
+						_err += 1;
+				}
 
-			session->session = conn;
 
-			if (connect->name)
-			{
-				strncpy(buf->name, connect->name, 32);
-				printf("Connection from client %s type %d\n", buf->name, buf->client_type);
+
+
+
+				if (_err >= 1)
+				{
+					/* we disconnect the client, an error happened */
+
+					/* a less drastic method might be better though ;) */
+					return 1;
+				}
 			}
 		}
 		break;
@@ -384,11 +453,26 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 
 		case NET_DATA:
 		{
-			int *tmp;
-			char *bufa;
+			u32 total = 0;
+			CList *buf;
+			
+			
+			if (Neuro_EBufIsEmpty(client_list))
+				return 0;
 
-			tmp = buffer;
-			bufa = (char*)&tmp[1];
+			total = Neuro_GiveEBufCount(client_list) + 1;
+
+			while (total-- > 0)
+			{
+				buf = Neuro_GiveEBuf(client_list, total);
+
+				if (clist_check_zombie(buf))
+					continue;
+				
+				Handle_Session(buf, conn, data, len);
+			}
+
+
 
 #if hardcode
 			/* printf("%c%c", bufa[0], bufa[1]); */
