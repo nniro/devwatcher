@@ -93,58 +93,39 @@ static CONNECT_DATA *hc_aclient;
 static int
 clist_check_zombie(CList *elem)
 {
+	Session *buf;
+	u32 total = 0;
 
-	if (elem->client_type == 1)
+	if (Neuro_EBufIsEmpty(elem->sessions))
 	{
-		Session *buf;
-		u32 total = 0;
+		NEURO_TRACE("Disconnecting a zombie active-parent connection's data", NULL);
 
-		if (Neuro_EBufIsEmpty(elem->sessions))
-		{
-			NEURO_TRACE("Disconnecting a zombie active-parent connection's data", NULL);
+		Neuro_SCleanEBuf(client_list, elem);
 
-			Neuro_SCleanEBuf(client_list, elem);
-
-			return 1;
-		}
-
-		total = Neuro_GiveEBufCount(elem->sessions) + 1;
-
-		while (total-- > 0)
-		{
-			buf = Neuro_GiveEBuf(elem->sessions, total);
-
-			if (NNet_ClientExist2(network, buf->session) == 0)
-			{
-				NEURO_TRACE("Disconnecting a zombie active-layer connection's data", NULL);
-
-				/* in case of an active client's layer, we need to remove the session 
-				 * element from the username only and not the whole element.
-				 */
-
-
-				Neuro_SCleanEBuf(elem->sessions, buf);
-
-				return 1;
-			}
-		}
+		return 1;
 	}
-	else
+
+	total = Neuro_GiveEBufCount(elem->sessions) + 1;
+
+	while (total-- > 0)
 	{
-		if (NNet_ClientExist2(network, elem->client) == 0)
+		buf = Neuro_GiveEBuf(elem->sessions, total);
+
+		if (NNet_ClientExist2(network, buf->session) == 0)
 		{
-			NEURO_TRACE("Disconnecting a zombie passive connection's data", NULL);
+			NEURO_TRACE("Disconnecting a zombie active-layer connection's data", NULL);
 
 			/* in case of an active client's layer, we need to remove the session 
 			 * element from the username only and not the whole element.
 			 */
 
 
-			Neuro_SCleanEBuf(client_list, elem);
+			Neuro_SCleanEBuf(elem->sessions, buf);
 
 			return 1;
 		}
 	}
+
 	return 0;
 }
 
@@ -176,6 +157,21 @@ clist_getD_from_name(char *name)
 	return NULL;
 }
 
+
+static void
+clean_session(void *src)
+{
+	Session *tmp;
+
+	tmp = (Session*)src;
+
+	if (tmp)
+	{
+		if (tmp->listeners)
+			Neuro_CleanEBuf(&tmp->listeners);
+	}
+}
+
 static void
 clean_clist(void *src)
 {
@@ -191,16 +187,65 @@ clean_clist(void *src)
 }
 
 static void
-Handle_Session(CList *lst, CONNECT_DATA *conn, char *data, u32 len)
+Broadcast_data(EBUF *listen, char *data, u32 len)
 {
 	u32 total = 0;
+	Listener *buf = NULL;
 
-	if (Neuro_EBufIsEmpty(lst->sessions))
+	if (Neuro_EBufIsEmpty(listen))
 	{
 		return;
 	}
 
+	total = Neuro_GiveEBufCount(listen) + 1;
 
+	while (total-- > 0)
+	{
+		buf = Neuro_GiveEBuf(listen, total);
+
+		if (NNet_ClientExist2(network, buf->client) == 0)
+		{
+			NEURO_TRACE("Disconnecting a zombie passive connection's data", NULL);
+
+			/* in case of an active client's layer, we need to remove the session 
+			 * element from the username only and not the whole element.
+			 */
+
+
+			Neuro_SCleanEBuf(client_list, buf);
+
+			continue;
+		}
+
+		NNet_Send(buf->client, data, len);
+	}
+}
+
+static int
+Handle_Session(CList *lst, CONNECT_DATA *conn, char *data, u32 len)
+{
+	u32 total = 0;
+	Session *buf;
+
+	if (Neuro_EBufIsEmpty(lst->sessions))
+	{
+		return 0;
+	}
+
+	total = Neuro_GiveEBufCount(lst->sessions) + 1;
+
+	while (total-- > 0)
+	{
+		buf = Neuro_GiveEBuf(lst->sessions, total);
+
+		if (buf->session == conn)
+		{
+			Broadcast_data(buf->listeners, data, len);
+			return 1;
+		}
+	}
+
+	return 0;
 }
 
 /*-------------------- Global Functions ----------------------------*/
@@ -214,8 +259,10 @@ Server_Poll()
 	CList *buf;
 
 	if (Neuro_EBufIsEmpty(client_list))
+	{
 		return;
-}
+	}
+
 	total = Neuro_GiveEBufCount(client_list) + 1;
 
         while (total-- > 0)
@@ -368,6 +415,7 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 				if (Neuro_EBufIsEmpty(buf->sessions))
 				{
 					Neuro_CreateEBuf(&buf->sessions);
+					Neuro_SetcallbEBuf(buf->sessions, clean_session);
 				}
 
 				Neuro_AllocEBuf(buf->sessions, sizeof(Session*), sizeof(Session));
@@ -375,6 +423,8 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 				session = Neuro_GiveCurEBuf(buf->sessions);
 
 				session->session = conn;
+
+				Neuro_CreateEBuf(&session->listeners);
 
 				if (connect->name)
 				{
@@ -394,7 +444,10 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 					buf = clist_getD_from_name(connect->name);
 				}
 				else
+				{
+					NEURO_TRACE("Couldn't find corresponding active name", NULL);
 					_err += 1;
+				}
 
 				if (buf)
 				{
@@ -403,7 +456,7 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 						Session *sess;
 						Listener *bufa;
 
-						if (Neuro_EBufIsEmpty(buf->sessions))
+						if (!Neuro_EBufIsEmpty(buf->sessions))
 						{
 							sess = Neuro_GiveEBuf(buf->sessions, connect->layer - 1);
 
@@ -419,11 +472,22 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 								_err += 1;
 						}
 						else
+						{
+							NEURO_TRACE("Couldn't find any sessions", NULL);
 							_err += 1;
+						}
 
 					}
 					else
+					{
+						NEURO_TRACE("Layer has to be > than 0", NULL);
 						_err += 1;
+					}
+				}
+				else
+				{
+					NEURO_TRACE("No active connections available", NULL);
+					_err += 1;
 				}
 
 
@@ -435,6 +499,7 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 					/* we disconnect the client, an error happened */
 
 					/* a less drastic method might be better though ;) */
+
 					return 1;
 				}
 			}
@@ -469,7 +534,8 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 				if (clist_check_zombie(buf))
 					continue;
 				
-				Handle_Session(buf, conn, data, len);
+				if (Handle_Session(buf, conn, data, len))
+					break;
 			}
 
 

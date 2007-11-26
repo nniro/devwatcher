@@ -326,6 +326,26 @@ SendConnect(char *username, char *password, int client_type)
 	NNet_Send(client, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
 }
 
+static void
+SendConnect2(char *username, u32 layer, int client_type)
+{
+	Pkt_Connect connect;
+
+	if (username)
+		strncpy(connect.name, username, 32);
+
+	connect.layer = layer;
+
+	connect.client_type = client_type;
+
+	Packet_Reset(pktbuf);
+
+	Packet_Push32(pktbuf, NET_CONNECT);
+	Packet_PushStruct(pktbuf, sizeof(Pkt_Connect), &connect);
+
+	NNet_Send(client, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
+}
+
 /*-------------------- Global Functions ----------------------------*/
 
 /*-------------------- Poll -------------------------*/
@@ -574,6 +594,12 @@ Client_Init(char *username, char *password, char *host, int port, int layer, int
 	{
 		log = fopen("log_file2", "w");
 	
+		if (username && layer > 0)
+		{
+			SendConnect2(username, layer, client_type);
+			return 0;
+		}
+
 		/* we send a packet to get
 		 * the list of active sessions 
 		 * currently on the server. 
@@ -581,6 +607,7 @@ Client_Init(char *username, char *password, char *host, int port, int layer, int
 		Packet_Push32(pktbuf, NET_QLIST);
 
 		NNet_Send(client, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
+
 
 
 		return 0;
