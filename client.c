@@ -414,7 +414,7 @@ Client_Poll()
 				{
 					/* printf("LEN %d  %d \'%d\'\n", c, buf[c], '\r'); */
 					leaving_bytes = 4;
-					break;
+					/* break; */
 				}
 
 				buffer = buf;
@@ -502,12 +502,16 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 		{
 			char *buf;
 			int *length;
+			int total = 0;
 
 			length = buffer;
 			buf = (char*)&length[1];
 
+			total = *length;
+			total += 4 + 4;
+
 			/* write an output to a file called log_file2 to see the packets that the passive client recieves. */
-			fprintf(log, "got [%d]: \"", *length);
+			fprintf(log, "got [%d][len %d][total %d]: \"", *length, len, total);
 			fwrite(buf, *length, 1, log);
 			fprintf(log, "\"\n");
 			fflush(log);
@@ -515,6 +519,12 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 			/* printf("recieved len %d, data len %d\n", len, *length); */
 
 			write(1, buf, *length);
+
+			if ((len - total) >= total)
+			{
+				fprintf(log, "pelling off packet to %d bytes\n", total);
+				packet_handler(conn, &buf[*length], len - total);
+			}
 		}
 		break;
 
