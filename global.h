@@ -3,7 +3,7 @@
 #ifndef __GLOBAL_H
 #define __GLOBAL_H
 
-#define NEURO_PROJECT_NAMESPACE "nsync"
+#define NEURO_PROJECT_NAMESPACE "dwatcher"
 
 enum packet_types
 {

@@ -25,7 +25,11 @@
 
 #include <sys/time.h>
 #include <sys/wait.h> /* wait3() */
+
+#include <errno.h> /* errno */
 /*-------------------- Local Headers Including ---------------------*/
+
+#include "main.h" /* Main_Exit() */
 
 #include "core.h"
 #include "packet.h"
@@ -90,7 +94,8 @@ done()
 		printf("program execution finished PID %d\n", getpid());
 	}
 
-	exit(0);
+	Main_Exit();
+	/*exit(0);*/
 }
 
 static void
@@ -111,14 +116,17 @@ finish(int dummy)
 	printf("pid %d ppid %d child %d exit status %d\n", getpid(), getppid(), child, status);
 	NEURO_TRACE("SIGCHLD %d", pid);
 	if (die)
+	{
 		done();
+		/* exit(0); */
+	}
 }
 
 static void
 resize(int dummy)
 {
 	ioctl(0, TIOCGWINSZ, (char*)&mpty->wsize);
-	ioctl(mpty->slave, TIOCGWINSZ, (char*)&mpty->wsize);
+	ioctl(mpty->slave, TIOCSWINSZ, (char*)&mpty->wsize);
 
 	kill(child, SIGWINCH);
 }
@@ -218,6 +226,13 @@ dooutput()
 
 	}
 
+	/* we send the EOT(end of transmission) packet (4 consecutive \0 bytes) */
+	buf[0] = 4;
+	write(xfer_fifo[1], buf, 1);
+	write(xfer_fifo[1], buf, 1);
+	write(xfer_fifo[1], buf, 1);
+	write(xfer_fifo[1], buf, 1);
+
 	close(xfer_fifo[1]);
 	/* fclose(fname); */
 
@@ -293,12 +308,15 @@ doshell()
 	dup2(mpty->slave, 2);
 	close(mpty->slave);
 	
-
-	printf("entering a new shell, you can exit it at any time to stop this process\n");
+	{
+		char *welcome = "entering a new shell, you can exit it at any time to stop this process";
+		printf("%s -- size %d\n", welcome, strlen(welcome));
+	}
 	
 	execl("/bin/bash", "bash", "-i", 0);
 
 	perror("/bin/bash");
+	
 	kill(0, SIGTERM);
 	done();
 
@@ -309,6 +327,8 @@ static void
 SendConnect(char *username, char *password, int client_type)
 {
 	Pkt_Connect connect;
+
+	memset(&connect, 0, sizeof(Pkt_Connect));
 
 	if (username)
 		strncpy(connect.name, username, 32);
@@ -355,6 +375,7 @@ static FILE *log;
 void
 Client_Poll()
 {
+	static int leaving_bytes = 4;
 	if (client_t)
 	{
 		if (USE_FORKS == 0)
@@ -371,6 +392,31 @@ Client_Poll()
 
 			while ((c = read(xfer_fifo[0], buf, sizeof(buf))) > 0)
 			{
+				/* we look for the EOT in the last bytes of the buffer */
+				if (buf[c - 1] == 4)
+				{
+					/* printf("FOUND ONE!!!\n"); */
+					i = c;
+					while (buf[--i] == 4)
+					{
+						/* printf("LEN %d removed one %d left char %d\n", c, leaving_bytes, buf[i]); */
+						leaving_bytes--;
+					}
+
+					if (leaving_bytes <= 0)
+					{
+						NEURO_TRACE("PIPE EXIT PACKET RECIEVED", NULL);
+						Main_Exit();
+						return;
+					}
+				}
+				else
+				{
+					/* printf("LEN %d  %d \'%d\'\n", c, buf[c], '\r'); */
+					leaving_bytes = 4;
+					break;
+				}
+
 				buffer = buf;
 
 				t = 0;
@@ -378,11 +424,14 @@ Client_Poll()
 				while (c > 0)
 				{
 					i = c;
-					if (i > 300)
-						i = 300;
+					if (i > 1)
+						i = 1;
 
 					/* write an output to a file called log_file to debug the packets sent to the server. */
-					fprintf(log, "c %d i %d t %d --> buffer \"%s\"\n", c, i, t, buffer);
+					/* fprintf(log, "c %d i %d t %d --> buffer \"%s\"\n", c, i, t, buffer); */
+					fprintf(log, "c %d i %d t %d --> buffer \"", c, i, t);
+					fwrite(buf, 1, i, log);
+					fprintf(log, "\"\n");
 					fflush(log);
 
 					t += i;
@@ -406,6 +455,20 @@ Client_Poll()
 
 				/* temporarily... this is not necessary */
 				memset(buf, 0, t);
+			}
+
+			if (c == -1 && errno != EAGAIN)
+			{
+				if (errno == EBADF || errno == EINTR)
+				{
+					/* end of process */
+					Main_Exit();
+					return;
+				}
+				else
+				{
+					printf("read buffer empty, errno set %d\n", errno);
+				}
 			}
 		}
 	}
@@ -626,6 +689,9 @@ Client_Clean()
 	Packet_Destroy(pktbuf);
 
 	close(xfer_fifo[0]);
+	close(xfer_fifo[1]);
+
+	fclose(log);
 
 	if (mpty)
 	{

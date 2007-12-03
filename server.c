@@ -75,11 +75,6 @@ static Packet *pktbuf;
 /* main server password */
 static char *server_password;
 
-#if hardcode
-/* HACK hardcoding FIXME */ 
-static CONNECT_DATA *hc_aclient;
-#endif /* hardcode */
-
 /*-------------------- Static Prototypes ---------------------------*/
 
 /*-------------------- Static Functions ----------------------------*/
@@ -211,11 +206,13 @@ Broadcast_data(EBUF *listen, char *data, u32 len)
 			 * element from the username only and not the whole element.
 			 */
 
-
-			Neuro_SCleanEBuf(client_list, buf);
+			Neuro_SCleanEBuf(listen, buf);
 
 			continue;
 		}
+
+		if (len >= 512)
+			NEURO_WARN("Broadcast Packet Bigger than 511 : %d", len);
 
 		NNet_Send(buf->client, data, len);
 	}
@@ -380,18 +377,6 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 					}
 				}
 
-#if hardcode
-				/* FIXME hardcode */
-				if (hc_aclient)
-				{
-					printf("hardcoded hack code -- access denied\n");
-					return 1;
-				}
-
-				hc_aclient = conn;
-				/* FIXME end hardcode */
-#endif /* hardcode */
-
 				if (connect->name)
 				{
 					buf = clist_getD_from_name(connect->name);
@@ -537,46 +522,12 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 				if (Handle_Session(buf, conn, data, len))
 					break;
 			}
-
-
-
-#if hardcode
-			/* printf("%c%c", bufa[0], bufa[1]); */
-			/* FIXME hardcode */
-			if (conn == hc_aclient)
-			{
-				u32 total = 0;
-				CList *buf;
-
-				if (Neuro_EBufIsEmpty(client_list))
-					return 0;
-
-				total = Neuro_GiveEBufCount(client_list) + 1;
-
-				while (total-- > 0)
-				{
-					buf = Neuro_GiveEBuf(client_list, total);
-
-					if (clist_check_zombie(buf))
-						continue;
-					
-					if (!buf->client_type)
-					{
-						if (len >= 512)
-							printf("-- Packet size too big %d\n", len);
-						/* printf("forwarding data len %d\n", len); */
-						NNet_Send(buf->client, data, len);
-					}
-				}
-			}
-			/* FIXME end hardcode */
-#endif /* hardcode */
 		}
 		break;
 
                 default:
                 {
-                        NEURO_WARN("Unhandled packet type recieved", NULL);
+                        NEURO_WARN("Unhandled packet type recieved len %d", len);
                 }
                 break;
 	}

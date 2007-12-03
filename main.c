@@ -133,6 +133,8 @@ static void
 clean_modules()
 {
 	Core_Clean();
+	NNet_Clean();
+	Neuro_Quit();
 }
 
 /*-------------------- Global Functions ----------------------------*/
@@ -228,6 +230,7 @@ int main(int argc, char **argv)
 			
 			main_loop();
 
+			NEURO_TRACE("CLEANING MODULES", 0);
 			clean_modules();
 		}
 		break;

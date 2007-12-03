@@ -47,7 +47,6 @@ Core_GetTime()
 int
 Core_Poll()
 {
-
 	/* NEURO_TRACE("core cycle", NULL); */
 
 	if (NNet_Poll())
