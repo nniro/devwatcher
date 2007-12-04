@@ -366,6 +366,67 @@ SendConnect2(char *username, u32 layer, int client_type)
 	NNet_Send(client, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
 }
 
+/* 
+ * return 1 if the packet is valid and 0 if not 
+ */
+static int
+check_valid_packet(char *data, u32 len)
+{
+	Pkt_Header *whole;
+	void *buffer;
+
+	whole = (Pkt_Header*)data;
+
+	buffer = &whole[1];
+
+	switch (whole->type)
+	{
+		case NET_DATA:
+		{
+			int *length;
+			int total = 0;
+			char *buf = NULL;
+
+			length = buffer;
+			buf = (char*)&length[1];
+
+			total = *length;
+			total += 4 + 4;
+
+			if ((len - total) >= total)
+			{
+				/* fprintf(log, "pelling off packet to %d bytes\n", total); */
+				return check_valid_packet(&buf[*length], len - total);
+			}
+		}
+		break;
+
+		case NET_ALIVE:
+		{
+		}
+		break;
+
+		case NET_DISCONNECT:
+		{
+		}
+		break;
+
+		case NET_LIST:
+		{
+		}
+		break;
+
+		default:
+		{
+			return 0;
+		}
+		break;
+	}
+
+	return 1;
+}
+
+
 /*-------------------- Global Functions ----------------------------*/
 
 /*-------------------- Poll -------------------------*/
@@ -503,6 +564,11 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 			char *buf;
 			int *length;
 			int total = 0;
+
+			if (check_valid_packet(data, len) == 0)
+			{
+				fprintf(log, "PACKET is not valid!\n");
+			}
 
 			length = buffer;
 			buf = (char*)&length[1];
