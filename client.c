@@ -485,8 +485,8 @@ Client_Poll()
 				while (c > 0)
 				{
 					i = c;
-					if (i > 1)
-						i = 1;
+					if (i > 490)
+						i = 490;
 
 					/* write an output to a file called log_file to debug the packets sent to the server. */
 					/* fprintf(log, "c %d i %d t %d --> buffer \"%s\"\n", c, i, t, buffer); */
@@ -585,12 +585,6 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 			/* printf("recieved len %d, data len %d\n", len, *length); */
 
 			write(1, buf, *length);
-
-			if ((len - total) >= total)
-			{
-				fprintf(log, "pelling off packet to %d bytes\n", total);
-				packet_handler(conn, &buf[*length], len - total);
-			}
 		}
 		break;
 
