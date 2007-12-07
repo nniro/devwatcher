@@ -351,6 +351,9 @@ SendConnect2(char *username, u32 layer, int client_type)
 {
 	Pkt_Connect connect;
 
+	memset(&connect, 0, sizeof(Pkt_Connect));
+
+
 	if (username)
 		strncpy(connect.name, username, 32);
 
@@ -625,6 +628,12 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 
 /*-------------------- Constructor Destructor ----------------------*/
 
+static void
+clean_program(int dummy)
+{
+	Main_Exit();
+}
+
 int
 Client_Init(char *username, char *password, char *host, int port, int layer, int client_type)
 {
@@ -634,8 +643,12 @@ Client_Init(char *username, char *password, char *host, int port, int layer, int
                 NEURO_ERROR("failed to connect", NULL);
                 return 1;
 	}
+	
+	
+	signal(SIGINT, clean_program);
 
-	NNet_SetTimeout(client, 0);
+
+	/* NNet_SetTimeout(client, 0); */
 
 	pktbuf = Packet_Create();
 
@@ -725,6 +738,7 @@ Client_Init(char *username, char *password, char *host, int port, int layer, int
 	}
 	else
 	{
+
 		log = fopen("log_file2", "w");
 	
 		if (username && layer > 0)

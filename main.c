@@ -225,6 +225,9 @@ int main(int argc, char **argv)
 			if (init_modules())
 			{
 				_err = 1;
+
+				clean_modules();
+
 				break;
 			}
 			

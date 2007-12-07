@@ -10,10 +10,14 @@
 #include <neuro/nnet/network.h>
 #include <string.h>
 
+#include <signal.h> /* signal() */
+
 /*-------------------- Local Headers Including ---------------------*/
 
 #include "core.h"
 #include "packet.h"
+
+#include "main.h" /* Main_Exit() */
 
 /*-------------------- Main Module Header --------------------------*/
 
@@ -162,8 +166,7 @@ clean_session(void *src)
 
 	if (tmp)
 	{
-		if (tmp->listeners)
-			Neuro_CleanEBuf(&tmp->listeners);
+		Neuro_CleanEBuf(&tmp->listeners);
 	}
 }
 
@@ -176,8 +179,30 @@ clean_clist(void *src)
 
 	if (tmp)
 	{
-		if (tmp->sessions)
-			Neuro_CleanEBuf(&tmp->sessions);
+		Neuro_CleanEBuf(&tmp->sessions);
+	}
+}
+
+static void
+clean_listener(void *src)
+{
+	Listener *tmp;
+
+	tmp = (Listener*)src;
+
+	if (tmp)
+	{
+		if (tmp->client)
+		{
+			NEURO_WARN("Disconnecting a residual passive connection", NULL);
+
+			/*Packet_Reset(pktbuf);
+			Packet_Push32(pktbuf, NET_DISCONNECT);
+			NNet_Send(tmp->client, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
+			*/
+
+			NNet_DisconnectClient(network, tmp->client);
+		}
 	}
 }
 
@@ -354,7 +379,7 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 
 			if (connect->client_type > 1)
 			{
-				printf("client has an unknown client type, dropping client\n");
+				NEURO_WARN("client has an unknown client type, dropping client", NULL);
 				return 1;
 			}
 
@@ -366,13 +391,11 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 				{
 					if (!strcmp(server_password, connect->password))
 					{
-						printf("client GRANTED ");
-						printf("active access to broadcasting server\n");
+						NEURO_WARN("client GRANTED active access to broadcasting server", NULL);
 					}
 					else
 					{
-						printf("client DENIED ");
-						printf("active access to broadcasting server\n");
+						NEURO_WARN("client DENIED active access to broadcasting server", NULL);
 						return 1;
 					}
 				}
@@ -410,11 +433,12 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 				session->session = conn;
 
 				Neuro_CreateEBuf(&session->listeners);
+				Neuro_SetcallbEBuf(session->listeners, clean_listener);
 
 				if (connect->name)
 				{
 					strncpy(buf->name, connect->name, 32);
-					printf("Connection from client %s type %d\n", buf->name, buf->client_type);
+					/* printf("Connection from client %s type %d\n", buf->name, buf->client_type); */
 				}
 
 			}
@@ -539,6 +563,12 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 
 /*-------------------- Constructor Destructor ----------------------*/
 
+static void
+clean_program(int dummy)
+{
+	Main_Exit();
+}
+
 int
 Server_Init(char *password, int port)
 {
@@ -557,6 +587,8 @@ Server_Init(char *password, int port)
 
 	if (password)
 		server_password = password;
+
+	signal(SIGINT, clean_program);
 
 	return 0;
 }
