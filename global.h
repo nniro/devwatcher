@@ -1,4 +1,6 @@
-/* global.h */
+/* global.h 
+ *
+ */
 
 #ifndef __GLOBAL_H
 #define __GLOBAL_H

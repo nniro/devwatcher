@@ -12,6 +12,8 @@
 
 #include <signal.h> /* signal() */
 
+#include <stdio.h> /* stderr printf() fprintf() */
+
 /*-------------------- Local Headers Including ---------------------*/
 
 #include "core.h"
@@ -476,6 +478,10 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 								bufa = Neuro_GiveCurEBuf(sess->listeners);
 
 								bufa->client = conn;
+
+								NEURO_TRACE("New passive connection", NULL);
+								/* temporary debugging output */
+								fprintf(stderr, "User %s Layer %d\n", buf->name, connect->layer);
 							}
 							else
 								_err += 1;

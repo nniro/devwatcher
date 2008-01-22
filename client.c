@@ -162,6 +162,8 @@ doinput()
 	register int c;
 	char buf[BUFSIZ];
 
+	printf("doinput pid %d\n", getpid());
+
 	while((c = read(0, buf, BUFSIZ)) > 0)
 		write(mpty->master, buf, c);
 
@@ -197,6 +199,8 @@ dooutput()
 	register int c;
 	char buf[BUFSIZ];
 	/*FILE *fname;*/
+
+	printf("dooutput pid %d\n", getpid());
 
 	/* we close stdin */
 	close(0); 
@@ -235,6 +239,8 @@ dooutput()
 
 	close(xfer_fifo[1]);
 	/* fclose(fname); */
+
+	printf("dooutput() DONE\n");
 
 	done();
 }
@@ -292,6 +298,9 @@ dopty()
 static int
 doshell()
 {
+
+	printf("doshell pid %d\n", getpid());
+
 	/* starts a new session */
 	setsid();
 	/* this sets the current controlling  */
@@ -318,6 +327,9 @@ doshell()
 	perror("/bin/bash");
 	
 	kill(0, SIGTERM);
+
+	printf("Leaving the bash instance\n");
+
 	done();
 
 	return 0;
@@ -648,7 +660,7 @@ Client_Init(char *username, char *password, char *host, int port, int layer, int
 	signal(SIGINT, clean_program);
 
 
-	/* NNet_SetTimeout(client, 0); */
+	NNet_SetTimeout(client, 0);
 
 	pktbuf = Packet_Create();
 

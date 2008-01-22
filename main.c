@@ -120,6 +120,12 @@ outputversion(char *data)
 static int
 init_modules()
 {
+	if (NNet_Init())
+	{
+		NEURO_ERROR("Initialisation of the neuronet library failed", NULL);
+		return 1;
+	}
+
 	if (Core_Init())
 	{
 		NEURO_ERROR("Initialisation of the Core module, failed", NULL);
