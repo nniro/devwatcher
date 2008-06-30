@@ -209,7 +209,7 @@ clean_listener(void *src)
 }
 
 static void
-Broadcast_data(EBUF *listen, char *data, u32 len)
+Broadcast_data(EBUF *listen, const char *data, u32 len)
 {
 	u32 total = 0;
 	Listener *buf = NULL;
@@ -246,7 +246,7 @@ Broadcast_data(EBUF *listen, char *data, u32 len)
 }
 
 static int
-Handle_Session(CList *lst, CONNECT_DATA *conn, char *data, u32 len)
+Handle_Session(CList *lst, CONNECT_DATA *conn, const char *data, u32 len)
 {
 	u32 total = 0;
 	Session *buf;
@@ -301,7 +301,7 @@ Server_Poll()
 /*-------------------- Packets handler Poll ------------------------*/
 
 static int
-packet_handler(CONNECT_DATA *conn, char *data, u32 len)
+packet_handler(CONNECT_DATA *conn, const char *data, u32 len)
 {
         Pkt_Header *whole;
 	void *buffer;
@@ -310,7 +310,21 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 
 	buffer = &whole[1];
 
-	/* NEURO_TRACE("Packet recieved type %d", whole->type); */
+	NEURO_TRACE("Packet recieved, len %d", len);
+
+	if (!whole && len > 0)
+	{
+		NEURO_ERROR("The data pointer is empty with len %d", len);
+		return 0;
+	}
+	else
+	{
+		if (!whole && len == 0)
+		{
+			NEURO_TRACE("New client connection", NULL);
+			return 0;
+		}
+	}
 
         switch (whole->type)
         {
@@ -557,7 +571,7 @@ packet_handler(CONNECT_DATA *conn, char *data, u32 len)
 
                 default:
                 {
-                        NEURO_WARN("Unhandled packet type recieved len %d", len);
+                        NEURO_WARN("%s", Neuro_s("Unhandled packet type recieved len %d data [%x %x %x %x]", len, data[0], data[1], data[2], data[3]));
                 }
                 break;
 	}
@@ -579,6 +593,8 @@ int
 Server_Init(char *password, int port)
 {
 	network = NNet_Create(packet_handler, 0);
+
+	NNet_ServerTogglePacketSize(network);
 
 	if(NNet_Listen(network, port))
 	{

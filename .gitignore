@@ -10,7 +10,6 @@
 *.so
 *.lai
 *.0
-Makefile
 config.log
 config.status
 *.3
