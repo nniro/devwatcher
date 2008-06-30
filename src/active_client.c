@@ -290,7 +290,7 @@ static int
 doshell()
 {
 
-	printf("doshell pid %d\n", getpid());
+	printf("doshell pid %d\n\r", getpid());
 
 	/* starts a new session */
 	setsid();
@@ -310,7 +310,7 @@ doshell()
 	
 	{
 		char *welcome = "entering a new shell, you can exit it at any time to stop this process";
-		printf("%s -- size %d\n", welcome, strlen(welcome));
+		printf("%s -- size %d\n\r", welcome, strlen(welcome));
 	}
 	
 	execl("/bin/bash", "bash", "-i", 0);

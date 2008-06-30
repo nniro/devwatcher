@@ -44,6 +44,8 @@ static Packet *pktbuf;
 /* time left until we send an alive packet type */
 static t_tick alive_time; 
 
+static int client_active = 0;
+
 /*-------------------- Static Prototypes ---------------------------*/
 
 /*-------------------- Static Functions ----------------------------*/
@@ -129,9 +131,8 @@ void
 Client_Poll()
 {
 
-#if ACTIVE_CLIENT_ENABLED
+	if (ACTIVE_CLIENT_ENABLED && client_active == 1)
 		Active_Poll();
-#endif /* ACTIVE_CLIENT_ENABLED */
 
 	if (alive_time < Neuro_GetTickCount())
 	{
@@ -151,6 +152,8 @@ packet_handler(CONNECT_DATA *conn, const char *data, u32 len)
 {
 	Pkt_Header *whole;
 	void *buffer;
+
+	NEURO_TRACE("recieved packet len %d", len);
 
 	whole = (Pkt_Header*)data;
 
@@ -236,9 +239,11 @@ Client_Init(char *username, char *password, char *host, int port, int layer, int
 	}
 	else
 	{
-#if ACTIVE_CLIENT_ENABLED
-		Active_Init(username, password);
-#endif /* ACTIVE_CLIENT_ENABLED */
+		if (ACTIVE_CLIENT_ENABLED)
+		{
+			Active_Init(username, password);
+			client_active = 1;
+		}
 	}
 
 	
@@ -257,5 +262,10 @@ Client_Clean()
 {
 	Packet_Destroy(pktbuf);
 
-        NNet_Destroy(network);	
+        NNet_Destroy(network);
+
+	if (client_active == 1)
+		Active_Clean();
+	else
+		Passive_Clean();
 }

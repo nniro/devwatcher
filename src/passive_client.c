@@ -108,7 +108,7 @@ Passive_Init(char *username, int layer)
 		 */
 		Packet_Push32(pktbuf, NET_QLIST);
 
-		NEURO_TRACE("sending packet %s", Packet_GetBuffer(pktbuf));
+		NEURO_TRACE("sending packet %d", Packet_GetLen(pktbuf));
 
 		Client_SendPacket(Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
 

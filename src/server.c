@@ -338,13 +338,16 @@ packet_handler(CONNECT_DATA *conn, const char *data, u32 len)
 			 * see Pkt_List in global.h
 			 */
 
+			NEURO_TRACE("NET_QLIST processing", NULL);
+
 			if (Neuro_EBufIsEmpty(client_list))
 			{
+				NEURO_TRACE("active client_list is empty, disconnecting client", NULL);
 				Packet_Reset(pktbuf);
 				Packet_Push32(pktbuf, NET_DISCONNECT);
 				NNet_Send(conn, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
 
-				return 0;
+				return 1;
 			}
 
 			total = Neuro_GiveEBufCount(client_list) + 1;
@@ -371,6 +374,7 @@ packet_handler(CONNECT_DATA *conn, const char *data, u32 len)
 
 					Packet_Push32(pktbuf, amount);
 
+					NEURO_TRACE("Pushing active client list to client", NULL);
 					/* also push a struct with more in depth informations 
 					 * about the layers.
 					 */
@@ -379,9 +383,12 @@ packet_handler(CONNECT_DATA *conn, const char *data, u32 len)
 				}
 			}
 
+			NEURO_TRACE("disconnecting client", NULL);
+
 			Packet_Reset(pktbuf);
 			Packet_Push32(pktbuf, NET_DISCONNECT);
 			NNet_Send(conn, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
+			return 0;
 		}
 		break;
 
@@ -476,6 +483,8 @@ packet_handler(CONNECT_DATA *conn, const char *data, u32 len)
 
 				if (buf)
 				{
+					NEURO_TRACE("Passive client wants layer %d", connect->layer);
+
 					if (connect->layer > 0)
 					{
 						Session *sess;
