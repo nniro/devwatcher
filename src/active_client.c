@@ -29,7 +29,6 @@
 /*-------------------- Local Headers Including ---------------------*/
 
 #include "main.h"
-
 #include "core.h"
 #include "packet.h"
 
@@ -82,9 +81,8 @@ done()
 	else
 	{
 		tcsetattr(0, TCSAFLUSH, &mpty->tt);
-		printf("program execution finished PID %d\n", getpid());
+		printf("program execution finished PID %d\r\n", getpid());
 	}
-
 	Main_Exit();
 	/*exit(0);*/
 }
@@ -104,7 +102,7 @@ finish(int dummy)
 			die = 1;
 	}
 
-	printf("pid %d ppid %d child %d exit status %d\n", getpid(), getppid(), child, status);
+	printf("pid %d ppid %d child %d exit status %d\r\n", getpid(), getppid(), child, status);
 	NEURO_TRACE("SIGCHLD %d", pid);
 	if (die)
 	{
@@ -153,12 +151,12 @@ doinput()
 	register int c;
 	char buf[BUFSIZ];
 
-	printf("doinput pid %d\n", getpid());
+	printf("doinput pid %d\r\n", getpid());
 
 	while((c = read(0, buf, BUFSIZ)) > 0)
 		write(mpty->master, buf, c);
 
-	printf("%s() DONE\n", __FUNCTION__);
+	printf("%s() DONE\r\n", __FUNCTION__);
 
 	done();
 }
@@ -191,7 +189,7 @@ dooutput()
 	char buf[BUFSIZ];
 	/*FILE *fname;*/
 
-	printf("dooutput pid %d\n", getpid());
+	printf("dooutput pid %d\r\n", getpid());
 
 	/* we close stdin */
 	close(0); 
@@ -231,7 +229,7 @@ dooutput()
 	close(xfer_fifo[1]);
 	/* fclose(fname); */
 
-	printf("dooutput() DONE\n");
+	printf("dooutput() DONE\r\n");
 
 	done();
 }
@@ -290,7 +288,7 @@ static int
 doshell()
 {
 
-	printf("doshell pid %d\n\r", getpid());
+	printf("doshell pid %d\r\n", getpid());
 
 	/* starts a new session */
 	setsid();
@@ -310,7 +308,7 @@ doshell()
 	
 	{
 		char *welcome = "entering a new shell, you can exit it at any time to stop this process";
-		printf("%s -- size %d\n\r", welcome, strlen(welcome));
+		printf("%s -- size %d\n", welcome, strlen(welcome));
 	}
 	
 	execl("/bin/bash", "bash", "-i", 0);
