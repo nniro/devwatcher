@@ -221,7 +221,7 @@ int main(int argc, char **argv)
 	_err = Neuro_ArgProcess();
 
 	NNet_SetDebugFilter("warn+all error+all");
-	/* NNet_SetDebugFilter("all+all"); */
+	/*NNet_SetDebugFilter("all+all");*/
 	Neuro_SetDebugFilter("+all trace-all");
 
 

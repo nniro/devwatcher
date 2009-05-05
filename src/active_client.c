@@ -202,13 +202,20 @@ dooutput()
 
 	while (1 != 2)
 	{
-		c = read(mpty->master, buf, sizeof(buf));
+		c = read(mpty->master, buf, BUFSIZ);
 
 		if (c <= 0)
 			break;
 
+		if (c == BUFSIZ)
+			printf("FULL BUFFER!\n");
+		else
+			printf("BUFFER IS USED AT %d%%\n", (int)(((double)c / (double)BUFSIZ) * (double)100));
+
 		/* printf("herein\n"); */
-		write(1, buf, c);
+		/* write(stdout, buf, c); */
+		fwrite(buf, 1, c, stdout);
+		fflush(stdout);
 
 		write(xfer_fifo[1], buf, c);
 
@@ -370,6 +377,18 @@ Active_Poll()
 
 		while ((c = read(xfer_fifo[0], buf, sizeof(buf))) > 0)
 		{
+
+			fwrite(buf, 1, c, log);
+			fflush(log);
+
+			Packet_Reset(pktbuf);
+
+			Packet_Push32(pktbuf, NET_DATA);
+			Packet_Push32(pktbuf, c);
+			Packet_PushString(pktbuf, c, buf);
+
+			Client_SendPacket(Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
+#if temp
 			/* we look for the EOT in the last bytes of the buffer */
 			if (buf[c - 1] == 4)
 			{
@@ -433,6 +452,7 @@ Active_Poll()
 
 			/* temporarily... this is not necessary */
 			memset(buf, 0, t);
+#endif /* temp */
 		}
 
 		if (c == -1 && errno != EAGAIN)
