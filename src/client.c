@@ -6,7 +6,7 @@
 /*-------------------- Extern Headers Including --------------------*/
 
 #include <neuro/NEURO.h>
-#include <neuro/nnet/network.h>
+#include <neuro/network.h>
 
 #include <signal.h> /* signal */
 

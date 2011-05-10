@@ -4,7 +4,7 @@
 #define __SERVER_H
 
 #include <neuro/NEURO.h>
-#include <neuro/nnet/network.h>
+#include <neuro/network.h>
 
 #include "global.h"
 

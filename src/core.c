@@ -4,7 +4,7 @@
 
 /*-------------------- Extern Headers Including --------------------*/
 #include <neuro/NEURO.h>
-#include <neuro/nnet/network.h>
+#include <neuro/network.h>
 #include <stdlib.h> /* getenv() */
 
 /*-------------------- Local Headers Including ---------------------*/

@@ -7,7 +7,7 @@
 /*-------------------- Extern Headers Including --------------------*/
 
 #include <neuro/NEURO.h>
-#include <neuro/nnet/network.h>
+#include <neuro/network.h>
 #include <string.h> /* strncmp */
 
 #include <signal.h> /* signal() */

@@ -4,7 +4,7 @@
 
 /*-------------------- Extern Headers Including --------------------*/
 #include <neuro/NEURO.h>
-#include <neuro/nnet/network.h> /* NNet_SetDebugFilter() */
+#include <neuro/network.h> /* NNet_SetDebugFilter() */
 #include <stdio.h>
 
 /*-------------------- Local Headers Including ---------------------*/
