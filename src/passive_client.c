@@ -10,7 +10,10 @@
 
 #include <unistd.h> /* write */
 
+#include <stdlib.h>
 #include <stdio.h> /* printf fprintf */
+
+#include <sys/ioctl.h>
 
 /*-------------------- Local Headers Including ---------------------*/
 
@@ -75,6 +78,16 @@ Passive_HandleData(const char *data, u32 len)
 	/* printf("recieved len %d, data len %d\n", len, *length); */
 
 	write(1, data, len);
+}
+
+void
+Passive_SetScreenSize(int cols, int rows)
+{
+	/*struct winsize wsize = {37,100,0,0};*/
+
+	NEURO_TRACE("Debug %s", Neuro_s("Screen size %dx%d", cols, rows));
+
+	/* ioctl(0, TIOCSWINSZ, (char*)&wsize);*/
 }
 
 /*-------------------- Poll -------------------------*/

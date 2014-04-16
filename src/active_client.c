@@ -12,6 +12,7 @@
 #include <stdio.h> /* printf fprintf */
 #include <unistd.h> /* execl */
 
+#include <sys/ioctl.h> /* ioctl */
 #include <sys/stat.h> /* mkfifo */
 #define __USE_BSD 1 /* for having cfmakeraw */
 #include <termios.h> /* tcgetattr tcsetattr cfmakeraw */
@@ -66,6 +67,8 @@ static int subchild;
 static int xfer_fifo[2];
 
 static FILE *log;
+
+static int activated = 0; /* mean to activate or deactivate the poll */
 
 /*-------------------- Static Prototypes ---------------------------*/
 
@@ -207,10 +210,12 @@ dooutput()
 		if (c <= 0)
 			break;
 
+		/*
 		if (c == BUFSIZ)
 			printf("FULL BUFFER!\n");
 		else
 			printf("BUFFER IS USED AT %d%%\n", (int)(((double)c / (double)BUFSIZ) * (double)100));
+		*/
 
 		/* printf("herein\n"); */
 		/* write(stdout, buf, c); */
@@ -288,6 +293,8 @@ dopty()
 		return NULL;
 	}
 
+	NEURO_TRACE("%s", Neuro_s("Created the PTY master %d slave %d", output->master, output->slave));
+
 	return output;
 }
 
@@ -356,12 +363,124 @@ SendConnect(char *username, char *password, int client_type)
 
 /*-------------------- Global Functions ----------------------------*/
 
+int
+Active_StartSession()
+{	
+	log = fopen("log_file", "w");
+
+	/* FIXME hardcoded */
+	if (pipe(xfer_fifo))
+	{
+		NEURO_ERROR("Pipe creation failure", NULL);
+		return 1;
+	}
+	/* FIXME end hardcoded */
+
+	mpty = dopty();
+
+	if (!mpty)
+	{
+		NEURO_ERROR("Pty creation failed", NULL);
+		return 1;
+	}
+
+	fixtty();
+
+	if (USE_FORKS)
+	{
+
+		signal(SIGCHLD, finish);
+
+		/* we create 2 forks, one acts as a new shell and the other 
+		 * continues the process of this code.
+		 *
+		 * child 0 continues to run this code
+		 * and child > 0 runs the new shell
+		 */
+
+		child = fork();
+
+		if (child < 0)
+		{
+			NEURO_ERROR("Creation of fork failed", NULL);
+			return 1;
+		}
+
+		/* printf("CHILD %d\n", getpid()); */
+		if (child == 0)
+		{
+			child = fork();
+
+			/* printf("CHILD2 %d\n", getpid()); */
+			if (child == 0)
+			{
+				subchild = child = fork();
+
+				/* printf("CHILD3 %d\n", getpid()); */
+				NEURO_TRACE("%s", Neuro_s("PTY size : row %d col %d", 
+					mpty->wsize.ws_row, 
+					mpty->wsize.ws_col));
+				if (child == 0)
+					doshell();
+				else
+					dooutput();
+			}
+
+			doinput();
+		}
+		else
+			signal(SIGWINCH, resize);
+	}
+	else
+	{
+		signal(SIGWINCH, resize);
+
+		child = fork();
+		
+		if (child < 0)
+		{
+			NEURO_ERROR("Creation of fork failed", NULL);
+			return 1;
+		}
+
+		if (child > 0)
+			doshell();
+	}
+
+	fcntl(xfer_fifo[0], F_SETFL, O_NONBLOCK);
+	close(xfer_fifo[1]);
+
+	/* activate the polling */
+	activated = 1;
+
+	return 0;
+}
+
+void
+Active_SendWSize()
+{
+	struct winsize wsize;
+
+	ioctl(0, TIOCGWINSZ, &wsize);
+
+	Packet_Reset(pktbuf);
+
+	Packet_Push32(pktbuf, NET_WSIZE);
+	Packet_Push32(pktbuf, wsize.ws_col);
+	Packet_Push32(pktbuf, wsize.ws_row);
+
+	Client_SendPacket(Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
+}
+
 /*-------------------- Poll -------------------------*/
 
 void
 Active_Poll()
 {
 	static int leaving_bytes = 4;
+
+	if (activated == 0)
+		return;
 
 	if (USE_FORKS == 0)
 	{
@@ -388,6 +507,7 @@ Active_Poll()
 			Packet_PushString(pktbuf, c, buf);
 
 			Client_SendPacket(Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
+
 #if temp
 			/* we look for the EOT in the last bytes of the buffer */
 			if (buf[c - 1] == 4)
@@ -481,89 +601,7 @@ Active_Init(char *username, char *password)
 
 	pktbuf = Packet_Create();
 
-	{	
-		log = fopen("log_file", "w");
-
-		/* FIXME hardcoded */
-		if (pipe(xfer_fifo))
-		{
-			NEURO_ERROR("Pipe creation failure", NULL);
-			return 1;
-		}
-		/* FIXME end hardcoded */
-
-		mpty = dopty();
-
-		if (!mpty)
-		{
-			NEURO_ERROR("Pty creation failed", NULL);
-			return 1;
-		}
-
-		fixtty();
-
-		if (USE_FORKS)
-		{
-
-			signal(SIGCHLD, finish);
-
-			/* we create 2 forks, one acts as a new shell and the other 
-			 * continues the process of this code.
-			 *
-			 * child 0 continues to run this code
-			 * and child > 0 runs the new shell
-			 */
-
-			child = fork();
-
-			if (child < 0)
-			{
-				NEURO_ERROR("Creation of fork failed", NULL);
-				return 1;
-			}
-
-			/* printf("CHILD %d\n", getpid()); */
-			if (child == 0)
-			{
-				child = fork();
-
-				/* printf("CHILD2 %d\n", getpid()); */
-				if (child == 0)
-				{
-					subchild = child = fork();
-
-					/* printf("CHILD3 %d\n", getpid()); */
-					if (child == 0)
-						doshell();
-					else
-						dooutput();
-				}
-
-				doinput();
-			}
-			else
-				signal(SIGWINCH, resize);
-		}
-		else
-		{
-			signal(SIGWINCH, resize);
-
-			child = fork();
-			
-			if (child < 0)
-			{
-				NEURO_ERROR("Creation of fork failed", NULL);
-				return 1;
-			}
-
-			if (child > 0)
-				doshell();
-		}
-
-		fcntl(xfer_fifo[0], F_SETFL, O_NONBLOCK);
-		close(xfer_fifo[1]);
-	}
-
+	
 	SendConnect(username, password, 1);
 
 	return 0;
@@ -573,6 +611,9 @@ void
 Active_Clean()
 {
 	Packet_Destroy(pktbuf);
+
+	if (activated == 0)
+		return;
 
 	close(xfer_fifo[0]);
 	close(xfer_fifo[1]);

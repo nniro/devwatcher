@@ -8,7 +8,7 @@
 
 #include <neuro/NEURO.h>
 #include <neuro/nnet/network.h>
-#include <string.h>
+#include <string.h> /* strncmp */
 
 #include <signal.h> /* signal() */
 
@@ -30,32 +30,33 @@
 NEURO_MODULE_CHANNEL("server");
 
 typedef struct CList CList;
+typedef struct Session Session;
 
 struct CList
 {
 	u8 client_type; /* 0 is passive, 1 is active */
-	char name[32];
+	char name[32]; /* active clients only */
 
-	CONNECT_DATA *client; /* for active and passive clients, this is the pointer to the connection */
-	CONNECT_DATA *audit; /* for passive clients, this is the pointer to an active connection. */
+	Session *audit; /* for passive clients only, this is the pointer to the connected session. */
 
 	/* sessions (layers of active clients that a passive client can watch) */
+	/* active clients only */
 	EBUF *sessions; /* contains Session type of elements */
-
 };
-
-typedef struct Session Session;
 
 struct Session
 {
 	/* each session need statistics like buffer size, how much bytes transfered 
 	 * and how long since the last change. All this for the list query packet.
 	 */
+	int active; /* 0 inactive, 1 active */
 
 	char *summary;
 	char *description;
 
-	CONNECT_DATA *session;
+	int cols, rows; /* the size of the broadcasting screen */
+
+	NNET_SLAVE *session;
 
 	/* list of passive clients that listen that session */
 	EBUF *listeners; /* contains Listener elements */
@@ -65,16 +66,16 @@ typedef struct Listener Listener;
 
 struct Listener
 {
-	CONNECT_DATA *client;
+	NNET_SLAVE *client;
 };
 
 /*-------------------- Global Variables ----------------------------*/
 
 /*-------------------- Static Variables ----------------------------*/
 
-static LISTEN_DATA *network;
+static NNET_SLAVE *server;
 
-static EBUF *client_list;
+static EBUF *client_list; /* CList */
 
 static Packet *pktbuf;
 
@@ -83,81 +84,9 @@ static char *server_password;
 
 /*-------------------- Static Prototypes ---------------------------*/
 
+static int packet_handler(NNET_SLAVE *conn, const char *data, u32 len);
+
 /*-------------------- Static Functions ----------------------------*/
-
-/* piece of code that checks if an element still exists or not then calls 
- * the necessary instructions to effectively clean the data.
- *
- * FIXME : when an active layer (active-layer) is cleaned off, we also need to
- * loop passive connections that are auditing it to make them disconnect nicely.
- */
-static int
-clist_check_zombie(CList *elem)
-{
-	Session *buf;
-	u32 total = 0;
-
-	if (Neuro_EBufIsEmpty(elem->sessions))
-	{
-		NEURO_TRACE("Disconnecting a zombie active-parent connection's data", NULL);
-
-		Neuro_SCleanEBuf(client_list, elem);
-
-		return 1;
-	}
-
-	total = Neuro_GiveEBufCount(elem->sessions) + 1;
-
-	while (total-- > 0)
-	{
-		buf = Neuro_GiveEBuf(elem->sessions, total);
-
-		if (NNet_ClientExist2(network, buf->session) == 0)
-		{
-			NEURO_TRACE("Disconnecting a zombie active-layer connection's data", NULL);
-
-			/* in case of an active client's layer, we need to remove the session 
-			 * element from the username only and not the whole element.
-			 */
-
-
-			Neuro_SCleanEBuf(elem->sessions, buf);
-
-			return 1;
-		}
-	}
-
-	return 0;
-}
-
-/* outputs a pointer to a CList element that corresponds to an username. */
-static CList*
-clist_getD_from_name(char *name)
-{
-	u32 total = 0;
-	CList *buf;
-
-	if (Neuro_EBufIsEmpty(client_list))
-		return NULL;
-
-	total = Neuro_GiveEBufCount(client_list) + 1;
-
-        while (total-- > 0)
-        {
-		buf = Neuro_GiveEBuf(client_list, total);
-
-		if (clist_check_zombie(buf))
-			continue;
-
-		if (!strcmp(buf->name, name))
-		{
-			return buf;
-		}
-        }
-
-	return NULL;
-}
-
 
 static void
 clean_session(void *src)
@@ -196,14 +125,14 @@ clean_listener(void *src)
 	{
 		if (tmp->client)
 		{
-			NEURO_WARN("Disconnecting a residual passive connection", NULL);
+			NEURO_WARN("Disconnecting a passive connection", NULL);
 
 			/*Packet_Reset(pktbuf);
 			Packet_Push32(pktbuf, NET_DISCONNECT);
 			NNet_Send(tmp->client, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
 			*/
 
-			NNet_DisconnectClient(network, tmp->client);
+			/*NNet_DisconnectClient(tmp->client);*/
 		}
 	}
 }
@@ -225,19 +154,6 @@ Broadcast_data(EBUF *listen, const char *data, u32 len)
 	{
 		buf = Neuro_GiveEBuf(listen, total);
 
-		if (NNet_ClientExist2(network, buf->client) == 0)
-		{
-			NEURO_TRACE("Disconnecting a zombie passive connection's data", NULL);
-
-			/* in case of an active client's layer, we need to remove the session 
-			 * element from the username only and not the whole element.
-			 */
-
-			Neuro_SCleanEBuf(listen, buf);
-
-			continue;
-		}
-
 		if (len >= 512)
 			NEURO_WARN("Broadcast Packet Bigger than 511 : %d", len);
 
@@ -246,7 +162,7 @@ Broadcast_data(EBUF *listen, const char *data, u32 len)
 }
 
 static int
-Handle_Session(CList *lst, CONNECT_DATA *conn, const char *data, u32 len)
+Handle_Session(CList *lst, NNET_SLAVE *conn, const char *data, u32 len)
 {
 	u32 total = 0;
 	Session *buf;
@@ -272,36 +188,145 @@ Handle_Session(CList *lst, CONNECT_DATA *conn, const char *data, u32 len)
 	return 0;
 }
 
+static CList *
+lookupCList(const char *name)
+{
+	CList *buf = NULL;
+	u32 total = 0;
+
+	if (!name || Neuro_EBufIsEmpty(client_list))
+		return NULL;
+
+	total = Neuro_GiveEBufCount(client_list) + 1;
+
+	while (total-- > 0)
+	{
+		buf = Neuro_GiveEBuf(client_list, total);
+
+		if (!strncmp(name, buf->name, 32))
+			return buf;
+	}
+
+	return NULL;
+}
+
+static Listener *
+lookupListener(EBUF *listeners, const NNET_SLAVE *slave)
+{
+	Listener *buf = NULL;
+	u32 total = 0;
+
+	if (!slave || Neuro_EBufIsEmpty(listeners))
+		return NULL;
+
+	total = Neuro_GiveEBufCount(listeners) + 1;
+
+	while (total-- > 0)
+	{
+		buf = Neuro_GiveEBuf(listeners, total);
+
+		if (slave == buf->client)
+			return buf;
+	}
+
+	return NULL;
+}
+
+static Session *
+lookupSession(EBUF *sessions, const NNET_SLAVE *slave)
+{
+	Session *buf = NULL;
+	u32 total = 0;
+
+	if (!slave || Neuro_EBufIsEmpty(sessions))
+		return NULL;
+
+	total = Neuro_GiveEBufCount(sessions) + 1;
+
+	while (total-- > 0)
+	{
+		buf = Neuro_GiveEBuf(sessions, total);
+
+		if (slave == buf->session)
+			return buf;
+	}
+
+	return NULL;
+}
+
 /*-------------------- Global Functions ----------------------------*/
 
 /*-------------------- Poll ------------------------*/
 
-void
-Server_Poll()
+int
+Server_Poll(NNET_STATUS *status)
 {
-	u32 total = 0;
-	CList *buf;
-
-	if (Neuro_EBufIsEmpty(client_list))
+	u32 _err = 0;
+	switch (NNet_GetStatus(status))
 	{
-		return;
+		case State_NoData:
+		{
+			/* NEURO_TRACE("No data", NULL); */
+		}
+		break;
+
+		case State_NewClient:
+		{
+			NEURO_TRACE("New client connection %s", NNet_GetIP(NNet_GetSlave(status)));
+		}
+		break;
+
+		case State_Disconnect:
+		{
+			/* closing the server */
+			return 1;
+		}
+		break;
+
+		case State_ClientDisconnect:
+		{
+			CList *buf = NULL;
+
+
+			buf = (CList *)NNet_GetData(NNet_GetSlave(status));
+			if (buf != NULL)
+			{
+
+				NEURO_TRACE("%s client disconnected", buf->client_type == 1 ? "Active" : "Passive");
+
+				if (buf->client_type == 0) /* passive connection */
+				{
+					Listener *tmp = lookupListener(buf->audit->listeners, NNet_GetSlave(status));
+					Neuro_SCleanEBuf(buf->audit->listeners, tmp);
+				}
+				/* nothing special need to be done for active connections */
+
+				Neuro_SCleanEBuf(client_list, buf);
+			}
+		}
+		break;
+
+		case State_DataAvail:
+		{
+			_err = packet_handler(NNet_GetSlave(status), NNet_GetPacket(status), NNet_GetPacketLen(status));
+		}
+		break;
+
+		default:
+		{
+			NEURO_ERROR("unknown status %d", NNet_GetStatus(status));
+			return 1;
+		}
+		break;
 	}
 
-	total = Neuro_GiveEBufCount(client_list) + 1;
-
-        while (total-- > 0)
-        {
-		buf = Neuro_GiveEBuf(client_list, total);
-
-		if (clist_check_zombie(buf))
-			continue;
-        }
+	return _err;
 }
 
 /*-------------------- Packets handler Poll ------------------------*/
 
 static int
-packet_handler(CONNECT_DATA *conn, const char *data, u32 len)
+packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 {
         Pkt_Header *whole;
 	void *buffer;
@@ -310,20 +335,12 @@ packet_handler(CONNECT_DATA *conn, const char *data, u32 len)
 
 	buffer = &whole[1];
 
-	NEURO_TRACE("Packet recieved, len %d", len);
+	/* NEURO_TRACE("Packet recieved, len %d", len); */
 
 	if (!whole && len > 0)
 	{
 		NEURO_ERROR("The data pointer is empty with len %d", len);
 		return 0;
-	}
-	else
-	{
-		if (!whole && len == 0)
-		{
-			NEURO_TRACE("New client connection", NULL);
-			return 0;
-		}
 	}
 
         switch (whole->type)
@@ -346,8 +363,9 @@ packet_handler(CONNECT_DATA *conn, const char *data, u32 len)
 				Packet_Reset(pktbuf);
 				Packet_Push32(pktbuf, NET_DISCONNECT);
 				NNet_Send(conn, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
+				NNet_DisconnectClient(conn);
 
-				return 1;
+				return 0;
 			}
 
 			total = Neuro_GiveEBufCount(client_list) + 1;
@@ -355,9 +373,6 @@ packet_handler(CONNECT_DATA *conn, const char *data, u32 len)
 			while (total-- > 0)
 			{
 				buf = Neuro_GiveEBuf(client_list, total);
-
-				if (clist_check_zombie(buf))
-					continue;
 				
 				if (buf->client_type == 1)
 				{
@@ -388,6 +403,7 @@ packet_handler(CONNECT_DATA *conn, const char *data, u32 len)
 			Packet_Reset(pktbuf);
 			Packet_Push32(pktbuf, NET_DISCONNECT);
 			NNet_Send(conn, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
+			NNet_DisconnectClient(conn);
 			return 0;
 		}
 		break;
@@ -403,29 +419,53 @@ packet_handler(CONNECT_DATA *conn, const char *data, u32 len)
 			if (connect->client_type > 1)
 			{
 				NEURO_WARN("client has an unknown client type, dropping client", NULL);
-				return 1;
+				NNet_DisconnectClient(conn);
+				return 0;
 			}
 
-			if (connect->client_type == 1)
+			if (connect->client_type == 1) /* an active client */
 			{
-				/* an active client */
-
 				if (server_password)
 				{
 					if (!strcmp(server_password, connect->password))
 					{
-						NEURO_WARN("client GRANTED active access to broadcasting server", NULL);
+						NEURO_TRACE("client GRANTED active access to broadcasting server", NULL);
+
+						Packet_Reset(pktbuf);
+
+						Packet_Push32(pktbuf, NET_INFO);
+
+						Packet_Push32(pktbuf, 1); /* access granted */
+
+						/* we don't send screen size infos */
+						Packet_Push32(pktbuf, 0);
+						Packet_Push32(pktbuf, 0);
+
+						NNet_Send(conn, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
 					}
 					else
 					{
-						NEURO_WARN("client DENIED active access to broadcasting server", NULL);
-						return 1;
+						NEURO_TRACE("client DENIED active access to broadcasting server", NULL);
+
+						Packet_Reset(pktbuf);
+
+						Packet_Push32(pktbuf, NET_INFO);
+
+						Packet_Push32(pktbuf, 0); /* access denied */
+
+						/* we don't send screen size infos */
+						Packet_Push32(pktbuf, 0);
+						Packet_Push32(pktbuf, 0);
+
+						NNet_Send(conn, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
+						NNet_DisconnectClient(conn);
+						return 0;
 					}
 				}
 
 				if (connect->name)
 				{
-					buf = clist_getD_from_name(connect->name);
+					buf = NNet_GetData(conn);
 				}
 
 				if (!buf)
@@ -434,13 +474,7 @@ packet_handler(CONNECT_DATA *conn, const char *data, u32 len)
 
 					buf = Neuro_GiveCurEBuf(client_list);
 
-					/* this will probably be removed eventually -- at least for 
-					 * active clients.
-					 */
-					buf->client = conn;
-
 					buf->client_type = connect->client_type;
-
 				}
 
 				if (Neuro_EBufIsEmpty(buf->sessions))
@@ -464,16 +498,17 @@ packet_handler(CONNECT_DATA *conn, const char *data, u32 len)
 					/* printf("Connection from client %s type %d\n", buf->name, buf->client_type); */
 				}
 
+				NNet_SetData(conn, buf);
 			}
-			else
+			else if (connect->client_type == 0) /* a passive client */
 			{
 				int _err = 0;
 				CList *buf = NULL;
 
-				/* a passive client */
 				if (connect->name)
 				{
-					buf = clist_getD_from_name(connect->name);
+					/*buf = NNet_GetData(conn);*/
+					buf = lookupCList(connect->name);
 				}
 				else
 				{
@@ -490,12 +525,21 @@ packet_handler(CONNECT_DATA *conn, const char *data, u32 len)
 						Session *sess;
 						Listener *bufa;
 
+
 						if (!Neuro_EBufIsEmpty(buf->sessions))
 						{
 							sess = Neuro_GiveEBuf(buf->sessions, connect->layer - 1);
 
-							if (sess)
+							if (sess && sess->active == 1)
 							{
+								CList *current;
+
+								Neuro_AllocEBuf(client_list, sizeof(CList*), sizeof(CList));
+								current = Neuro_GiveCurEBuf(client_list);
+								current->client_type = connect->client_type;
+								current->audit = sess;
+
+
 								Neuro_AllocEBuf(sess->listeners, sizeof(Listener*), sizeof(Listener));
 
 								bufa = Neuro_GiveCurEBuf(sess->listeners);
@@ -505,6 +549,17 @@ packet_handler(CONNECT_DATA *conn, const char *data, u32 len)
 								NEURO_TRACE("New passive connection", NULL);
 								/* temporary debugging output */
 								fprintf(stderr, "User %s Layer %d\n", buf->name, connect->layer);
+
+								Packet_Reset(pktbuf);
+								Packet_Push32(pktbuf, NET_INFO);
+								Packet_Push32(pktbuf, 1); /* access granted */
+								/* we send screen size infos */
+								Packet_Push32(pktbuf, sess->cols);
+								Packet_Push32(pktbuf, sess->rows);
+
+								NNet_Send(conn, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
+
+								NNet_SetData(conn, current);
 							}
 							else
 								_err += 1;
@@ -528,17 +583,72 @@ packet_handler(CONNECT_DATA *conn, const char *data, u32 len)
 					_err += 1;
 				}
 
-
-
-
-
 				if (_err >= 1)
 				{
 					/* we disconnect the client, an error happened */
-
 					/* a less drastic method might be better though ;) */
 
-					return 1;
+					Packet_Reset(pktbuf);
+
+					Packet_Push32(pktbuf, NET_INFO);
+
+					Packet_Push32(pktbuf, 0); /* access denied */
+
+					/* we don't send screen size infos */
+					Packet_Push32(pktbuf, 0);
+					Packet_Push32(pktbuf, 0);
+
+					NNet_Send(conn, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
+
+					NNet_DisconnectClient(conn);
+					return 0;
+				}
+			}
+			else
+			{
+				NEURO_WARN("Client sent an invalid client type, disconnecting", NULL);
+				NNet_DisconnectClient(conn);
+				return 0;
+			}
+		}
+		break;
+
+		case NET_WSIZE:
+		{
+			CList *buf;
+			Session *session;
+
+			buf = NNet_GetData(conn);
+
+			if (!buf)
+			{
+				NEURO_WARN("Invalid Client detected, disconnecting", NULL);
+				NNet_DisconnectClient(conn);
+				return 0;
+			}
+
+			session = lookupSession(buf->sessions, conn);
+
+			if (!session)
+			{
+				NEURO_WARN("Active client attempts to set WSize without a session", NULL);
+				return 0;
+			}
+
+			if (len >= sizeof(Pkt_WSize))
+			{
+				Pkt_WSize *tmp;
+
+				tmp = (Pkt_WSize*)buffer;
+
+				session->cols = tmp->cols;
+				session->rows = tmp->rows;
+
+				if (session->cols > 0 && session->rows > 0)
+				{
+					NEURO_TRACE("Active connection screen size : %s", 
+						Neuro_s("%dx%d", session->cols, session->rows));
+					session->active = 1;
 				}
 			}
 		}
@@ -558,7 +668,37 @@ packet_handler(CONNECT_DATA *conn, const char *data, u32 len)
 		{
 			u32 total = 0;
 			CList *buf;
+			Session *session;
+
+			buf = NNet_GetData(conn);
+
+			if (!buf)
+			{
+				NEURO_WARN("Invalid Client detected, disconnecting", NULL);
+				NNet_DisconnectClient(conn);
+				return 0;
+			}
 			
+			session = lookupSession(buf->sessions, conn);
+
+			if (!session)
+			{
+				NEURO_WARN("Active client attempts to broadcast without a session", NULL);
+				return 0;
+			}
+
+			if (session->cols == 0 || session->rows == 0)
+			{
+				NEURO_WARN("Active client attempts to broadcast without having sent the correct screen size information", NULL);
+				NNet_DisconnectClient(conn);
+				return 0;
+			}
+
+			if (session->active == 0)
+			{
+				NEURO_WARN("Active client sent data to an inactive session", NULL);
+				return 0;
+			}
 			
 			if (Neuro_EBufIsEmpty(client_list))
 				return 0;
@@ -568,9 +708,6 @@ packet_handler(CONNECT_DATA *conn, const char *data, u32 len)
 			while (total-- > 0)
 			{
 				buf = Neuro_GiveEBuf(client_list, total);
-
-				if (clist_check_zombie(buf))
-					continue;
 				
 				if (Handle_Session(buf, conn, data, len))
 					break;
@@ -581,6 +718,8 @@ packet_handler(CONNECT_DATA *conn, const char *data, u32 len)
                 default:
                 {
                         NEURO_WARN("%s", Neuro_s("Unhandled packet type recieved len %d data [%x %x %x %x]", len, data[0], data[1], data[2], data[3]));
+			NEURO_TRACE("Disconnecting client", NULL);
+			NNet_DisconnectClient(conn);
                 }
                 break;
 	}
@@ -599,13 +738,13 @@ clean_program(int dummy)
 }
 
 int
-Server_Init(char *password, int port)
+Server_Init(NNET_MASTER *master, char *password, int port)
 {
-	network = NNet_Create(packet_handler, 0);
+	/* NNet_ServerTogglePacketSize(network); */
 
-	NNet_ServerTogglePacketSize(network);
+	server = NNet_Listen(master, "0.0.0.0", port);
 
-	if(NNet_Listen(network, port))
+	if(!server)
 	{
 		NEURO_ERROR("failed to listen", NULL);
 		return 1;
@@ -630,6 +769,5 @@ Server_Clean()
 	Packet_Destroy(pktbuf);
 
 	Neuro_CleanEBuf(&client_list);
-	NNet_Destroy(network);
 }
 

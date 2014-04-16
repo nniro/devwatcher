@@ -8,8 +8,8 @@
 
 #include "global.h"
 
-extern void Server_Poll();
-extern int Server_Init(char *password, int port);
+extern int Server_Poll(NNET_STATUS *status);
+extern int Server_Init(NNET_MASTER *master, char *password, int port);
 extern void Server_Clean();
 
 #endif /* NOT __SERVER_H */

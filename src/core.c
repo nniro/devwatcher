@@ -4,6 +4,7 @@
 
 /*-------------------- Extern Headers Including --------------------*/
 #include <neuro/NEURO.h>
+#include <neuro/nnet/network.h>
 #include <stdlib.h> /* getenv() */
 
 /*-------------------- Local Headers Including ---------------------*/
@@ -23,10 +24,12 @@ NEURO_MODULE_CHANNEL("core");
 
 /*-------------------- Static Variables ----------------------------*/
 
-static t_tick start_time;
+static t_tick start_time = 0;
 
 /* set to 1 if we are a client */
 static u8 client = 0;
+
+static NNET_MASTER *master = NULL;
 
 /*-------------------- Static Prototypes ---------------------------*/
 
@@ -47,15 +50,20 @@ Core_GetTime()
 int
 Core_Poll()
 {
+	NNET_STATUS *status = NULL;
 	/* NEURO_TRACE("core cycle", NULL); */
+	status = NNet_Poll(master);
 
-	if (NNet_Poll())
+	if (!status)
+	{
+		NEURO_ERROR("Status is NULL", NULL);
 		return 1;
+	}
 
 	if (!client)
-		Server_Poll();
+		return Server_Poll(status);
 	else
-		Client_Poll();
+		return Client_Poll(status);
 
 	return 0;
 }
@@ -73,6 +81,8 @@ Core_Init()
 	{
 		char *name = Main_GetClientName();
 
+		master = NNet_Create(TYPE_CLIENT);
+
 		/* we are a client */
 		NEURO_TRACE("We are a client %d", Main_GetClientType());
 
@@ -83,7 +93,7 @@ Core_Init()
 			NEURO_TRACE("Connecting as user %s\n", name);
 		}
 
-		if (Client_Init(name, Main_GetPassword(), 
+		if (Client_Init(master, name, Main_GetPassword(), 
 					Main_GetClientConnect(), 
 					Main_GetPort(),
 					Main_GetLayer(),
@@ -107,7 +117,9 @@ Core_Init()
 		/* we are a server */
 		NEURO_TRACE("We are a server", NULL);
 
-		if (Server_Init(Main_GetPassword(), Main_GetPort()))
+		master = NNet_Create(TYPE_SERVER);
+
+		if (Server_Init(master, Main_GetPassword(), Main_GetPort()))
 			return 1;
 	}
 
@@ -122,4 +134,6 @@ Core_Clean()
 		Client_Clean();
 	else
 		Server_Clean();
+
+	NNet_Destroy(master);
 }

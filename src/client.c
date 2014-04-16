@@ -36,8 +36,7 @@ NEURO_MODULE_CHANNEL("client");
 
 /*-------------------- Static Variables ----------------------------*/
 
-static LISTEN_DATA *network;
-static CONNECT_DATA *client;
+static NNET_SLAVE *client;
 
 static Packet *pktbuf;
 
@@ -47,6 +46,8 @@ static t_tick alive_time;
 static int client_active = 0;
 
 /*-------------------- Static Prototypes ---------------------------*/
+
+static int packet_handler(NNET_SLAVE *conn, const char *data, u32 len);
 
 /*-------------------- Static Functions ----------------------------*/
 
@@ -61,7 +62,7 @@ clean_program(int dummy)
 void
 Client_SendPacket(const char *data, u32 len)
 {
-	/* NEURO_TRACE("sending %s", Neuro_s("packet len %d \'%s\'", len, data)); */
+	/*NEURO_TRACE("sending %s", Neuro_s("packet len %d \'%s\'", len, data));*/
 	NNet_Send(client, data, len);
 }
 
@@ -127,9 +128,38 @@ Client_IsValidPacket(const char *data, u32 len)
 
 /*-------------------- Poll -------------------------*/
 
-void
-Client_Poll()
+int
+Client_Poll(NNET_STATUS *status)
 {
+	u32 _err = 0;
+	switch (NNet_GetStatus(status))
+	{
+		case State_NoData:
+		{
+			/* NEURO_TRACE("No data", NULL); */
+		}
+		break;
+
+		case State_ClientDisconnect:
+		{
+			/* closing the server */
+			return 1;
+		}
+		break;
+
+		case State_DataAvail:
+		{
+			_err = packet_handler(NNet_GetSlave(status), NNet_GetPacket(status), NNet_GetPacketLen(status));
+		}
+		break;
+
+		default:
+		{
+			NEURO_ERROR("unknown status %d", NNet_GetStatus(status));
+			return 1;
+		}
+		break;
+	}
 
 	if (ACTIVE_CLIENT_ENABLED && client_active == 1)
 		Active_Poll();
@@ -143,17 +173,24 @@ Client_Poll()
 
 		NNet_Send(client, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
 	}
+	return _err;
 }
 
 /*-------------------- Packet handler Poll -------------------------*/
 
 static int
-packet_handler(CONNECT_DATA *conn, const char *data, u32 len)
+packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 {
 	Pkt_Header *whole;
 	void *buffer;
 
-	NEURO_TRACE("recieved packet len %d", len);
+	/* NEURO_TRACE("recieved packet len %d", len); */
+
+	if (len <= 0 || !data)
+	{
+		NEURO_WARN("Invalid packet recieved", NULL);
+		return 1;
+	}
 
 	whole = (Pkt_Header*)data;
 
@@ -181,6 +218,41 @@ packet_handler(CONNECT_DATA *conn, const char *data, u32 len)
 			Passive_HandleData(buf, *length);
 		}
 		break;
+
+		case NET_INFO:
+		{
+			Pkt_Info *tmp;
+			int cols = 0, rows = 0;
+
+			tmp = (Pkt_Info*)buffer;
+
+			if (tmp->access == 0)
+			{
+				NEURO_TRACE("Server access denied", NULL);
+				return 1;
+			}
+
+			if (len >= sizeof(Pkt_WSize))
+			{
+				cols = tmp->cols;
+				rows = tmp->rows;
+			}
+			else
+			{
+				/* we disconnect */
+				return 1;
+			}
+
+			if (client_active == 1)
+			{
+				Active_SendWSize();
+				Active_StartSession();
+			}
+			else
+			{
+				Passive_SetScreenSize(cols, rows);
+			}
+		}
 
 		case NET_ALIVE:
 		{
@@ -220,18 +292,17 @@ packet_handler(CONNECT_DATA *conn, const char *data, u32 len)
 /*-------------------- Constructor Destructor ----------------------*/
 
 int
-Client_Init(char *username, char *password, char *host, int port, int layer, int client_type)
+Client_Init(NNET_MASTER *master, char *username, char *password, char *host, int port, int layer, int client_type)
 {
-	network = NNet_Create(packet_handler, 1);
-
-	if(NNet_Connect(network, host, port, &client))
+	client = NNet_Connect(master, host, port);
+	if(!client)
 	{
                 NEURO_ERROR("failed to connect", NULL);
                 return 1;
 	}
 
-	NNet_ClientTogglePacketSize(client);
-	NNet_SetTimeout(client, 0);
+	/*NNet_SetSendPacketSize(master);*/
+	NNet_SetTimeOut(client, 0);
 
 	if (client_type == 0)
 	{
@@ -261,8 +332,6 @@ void
 Client_Clean()
 {
 	Packet_Destroy(pktbuf);
-
-        NNet_Destroy(network);
 
 	if (client_active == 1)
 		Active_Clean();

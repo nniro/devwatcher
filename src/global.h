@@ -18,10 +18,12 @@ enum packet_types
 
 	/* s2c */
 	NET_LIST, /* send list */
+	NET_INFO, /* replies to an active or a passive client */
 	NET_DISCONNECT, /* disconnects a client */
 
 	/* c2s */
 	NET_CONNECT,
+	NET_WSIZE, /* active client to send the size of the screen */
 	NET_QLIST, /* query list */
 	NET_SELECT, /* select which element in the list to listen to. */
 
@@ -36,7 +38,6 @@ struct Pkt_Header
 	u32 type; /* the packet type */
 };
 
-
 typedef struct Pkt_Connect Pkt_Connect;
 
 struct Pkt_Connect
@@ -48,12 +49,27 @@ struct Pkt_Connect
 	char version[8];
 };
 
+typedef struct Pkt_Info Pkt_Info;
+
+struct Pkt_Info
+{
+	int access; /* value of 1 if the client has access and 0 for otherwise (active & passive) */
+	int cols, rows; /* sent to passive clients, the columns and rows of the transmission */
+};
+
 typedef struct Pkt_Select Pkt_Select;
 
 struct Pkt_Select
 {
 	char name[32];
 	u32 layer;
+};
+
+typedef struct Pkt_WSize Pkt_WSize;
+
+struct Pkt_WSize
+{
+	int cols, rows;
 };
 
 typedef struct Pkt_List Pkt_List;

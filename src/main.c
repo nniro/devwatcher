@@ -120,11 +120,6 @@ outputversion(char *data)
 static int
 init_modules()
 {
-	if (NNet_Init())
-	{
-		NEURO_ERROR("Initialisation of the neuronet library failed", NULL);
-		return 1;
-	}
 
 	if (Core_Init())
 	{
@@ -139,7 +134,6 @@ static void
 clean_modules()
 {
 	Core_Clean();
-	NNet_Clean();
 	Neuro_Quit();
 }
 
@@ -220,9 +214,11 @@ int main(int argc, char **argv)
 
 	_err = Neuro_ArgProcess();
 
-	NNet_SetDebugFilter("warn+all error+all");
-	/*NNet_SetDebugFilter("all+all");*/
-	Neuro_SetDebugFilter("+all trace-all");
+	/* NNet_SetDebugFilter("warn+all error+all"); */
+	/* NNet_SetDebugFilter("all+all"); */
+	Neuro_SetDebugFilter("all+all");
+	Neuro_SetNeuroDebugFilter("warn+all error+all");
+	/* Neuro_SetDebugFilter("+all trace-all"); */
 
 
 	switch (_err)
@@ -256,7 +252,7 @@ int main(int argc, char **argv)
 		case 2:
 		{
 			_err = 1;
-			/* printf("error\n"); */
+			printf("error\n");
 			break;
 		}
 		break;
