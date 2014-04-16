@@ -546,6 +546,23 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 						return 0;
 					}
 				}
+				else /* without a password */
+				{
+					TRACE("client GRANTED active access to broadcasting server");
+
+					Packet_Reset(pktbuf);
+
+					Packet_Push32(pktbuf, NET_INFO);
+					Packet_Push32(pktbuf, 0);
+
+					Packet_Push32(pktbuf, 1); /* access granted */
+
+					/* we don't send screen size infos */
+					Packet_Push32(pktbuf, 0);
+					Packet_Push32(pktbuf, 0);
+
+					Server_SendPacket(conn, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
+				}
 
 				if (connect->name)
 				{
