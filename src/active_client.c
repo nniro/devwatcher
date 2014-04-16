@@ -7,6 +7,8 @@
 /*-------------------- Extern Headers Including --------------------*/
 
 #include <neuro/NEURO.h>
+#include <neuro/packet.h>
+
 #include <string.h> /* strlen memset strncpy */
 
 #include <stdio.h> /* printf fprintf */
@@ -31,7 +33,6 @@
 
 #include "main.h"
 #include "core.h"
-#include "packet.h"
 
 /*-------------------- Main Module Header --------------------------*/
 
@@ -84,7 +85,7 @@ done()
 	else
 	{
 		tcsetattr(0, TCSAFLUSH, &mpty->tt);
-		printf("program execution finished PID %d\r\n", getpid());
+		printf(Neuro_s("program execution finished PID %d\r\n", getpid()));
 	}
 	Main_Exit();
 	/*exit(0);*/
@@ -97,7 +98,7 @@ finish(int dummy)
 	register int pid;
 	register int die = 0;
 
-	NEURO_TRACE("CATCHED SIGNAL SIGCHLD", NULL);
+	TRACE("CATCHED SIGNAL SIGCHLD");
 
 	while ((pid = wait3(&status, WNOHANG, 0)) > 0)
 	{
@@ -105,8 +106,8 @@ finish(int dummy)
 			die = 1;
 	}
 
-	printf("pid %d ppid %d child %d exit status %d\r\n", getpid(), getppid(), child, status);
-	NEURO_TRACE("SIGCHLD %d", pid);
+	printf(Neuro_s("pid %d ppid %d child %d exit status %d\r\n", getpid(), getppid(), child, status));
+	TRACE(Neuro_s("SIGCHLD %d", pid));
 	if (die)
 	{
 		done();
@@ -154,12 +155,12 @@ doinput()
 	register int c;
 	char buf[BUFSIZ];
 
-	printf("doinput pid %d\r\n", getpid());
+	printf(Neuro_s("doinput pid %d\r\n", getpid()));
 
 	while((c = read(0, buf, BUFSIZ)) > 0)
 		write(mpty->master, buf, c);
 
-	printf("%s() DONE\r\n", __FUNCTION__);
+	printf(Neuro_s("%s() DONE\r\n", __FUNCTION__));
 
 	done();
 }
@@ -192,7 +193,7 @@ dooutput()
 	char buf[BUFSIZ];
 	/*FILE *fname;*/
 
-	printf("dooutput pid %d\r\n", getpid());
+	printf(Neuro_s("dooutput pid %d\r\n", getpid()));
 
 	/* we close stdin */
 	close(0); 
@@ -288,12 +289,12 @@ dopty()
 
 	if (openpty(&output->master, &output->slave, NULL, &output->tt, &output->wsize) < 0)
 	{
-		NEURO_ERROR("Unable to create a new PTY", NULL);
+		ERROR("Unable to create a new PTY");
 		free(output);
 		return NULL;
 	}
 
-	NEURO_TRACE("%s", Neuro_s("Created the PTY master %d slave %d", output->master, output->slave));
+	TRACE(Neuro_s("Created the PTY master %d slave %d", output->master, output->slave));
 
 	return output;
 }
@@ -302,7 +303,7 @@ static int
 doshell()
 {
 
-	printf("doshell pid %d\r\n", getpid());
+	printf(Neuro_s("doshell pid %d\r\n", getpid()));
 
 	/* starts a new session */
 	setsid();
@@ -322,7 +323,7 @@ doshell()
 	
 	{
 		char *welcome = "entering a new shell, you can exit it at any time to stop this process";
-		printf("%s -- size %d\n", welcome, strlen(welcome));
+		printf(Neuro_s("%s -- size %d\n", welcome, strlen(welcome)));
 	}
 	
 	execl("/bin/bash", "bash", "-i", 0);
@@ -356,6 +357,7 @@ SendConnect(char *username, char *password, int client_type)
 	Packet_Reset(pktbuf);
 
 	Packet_Push32(pktbuf, NET_CONNECT);
+	Packet_Push32(pktbuf, 0);
 	Packet_PushStruct(pktbuf, sizeof(Pkt_Connect), &connect);
 
 	Client_SendPacket(Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
@@ -371,7 +373,7 @@ Active_StartSession()
 	/* FIXME hardcoded */
 	if (pipe(xfer_fifo))
 	{
-		NEURO_ERROR("Pipe creation failure", NULL);
+		ERROR("Pipe creation failure");
 		return 1;
 	}
 	/* FIXME end hardcoded */
@@ -380,7 +382,7 @@ Active_StartSession()
 
 	if (!mpty)
 	{
-		NEURO_ERROR("Pty creation failed", NULL);
+		ERROR("Pty creation failed");
 		return 1;
 	}
 
@@ -402,7 +404,7 @@ Active_StartSession()
 
 		if (child < 0)
 		{
-			NEURO_ERROR("Creation of fork failed", NULL);
+			ERROR("Creation of fork failed");
 			return 1;
 		}
 
@@ -417,7 +419,7 @@ Active_StartSession()
 				subchild = child = fork();
 
 				/* printf("CHILD3 %d\n", getpid()); */
-				NEURO_TRACE("%s", Neuro_s("PTY size : row %d col %d", 
+				TRACE(Neuro_s("PTY size : row %d col %d", 
 					mpty->wsize.ws_row, 
 					mpty->wsize.ws_col));
 				if (child == 0)
@@ -439,7 +441,7 @@ Active_StartSession()
 		
 		if (child < 0)
 		{
-			NEURO_ERROR("Creation of fork failed", NULL);
+			ERROR("Creation of fork failed");
 			return 1;
 		}
 
@@ -466,6 +468,7 @@ Active_SendWSize()
 	Packet_Reset(pktbuf);
 
 	Packet_Push32(pktbuf, NET_WSIZE);
+	Packet_Push32(pktbuf, 0);
 	Packet_Push32(pktbuf, wsize.ws_col);
 	Packet_Push32(pktbuf, wsize.ws_row);
 
@@ -503,6 +506,7 @@ Active_Poll()
 			Packet_Reset(pktbuf);
 
 			Packet_Push32(pktbuf, NET_DATA);
+			Packet_Push32(pktbuf, 0);
 			Packet_Push32(pktbuf, c);
 			Packet_PushString(pktbuf, c, buf);
 
@@ -522,7 +526,7 @@ Active_Poll()
 
 				if (leaving_bytes <= 0)
 				{
-					NEURO_TRACE("PIPE EXIT PACKET RECIEVED", NULL);
+					TRACE("PIPE EXIT PACKET RECIEVED");
 					Main_Exit();
 					return;
 				}
@@ -558,12 +562,13 @@ Active_Poll()
 				Packet_Reset(pktbuf);
 
 				Packet_Push32(pktbuf, NET_DATA);
+				Packet_Push32(pktbuf, 0);
 				Packet_Push32(pktbuf, i);
 				Packet_PushString(pktbuf, i, buffer);
 
 				if (Packet_GetLen(pktbuf) > (4 + 4 + i))
 				{
-					NEURO_ERROR("Packet bigger than it should by %d bytes", Packet_GetLen(pktbuf) - 200);
+					ERROR(Neuro_s("Packet bigger than it should by %d bytes", Packet_GetLen(pktbuf) - 200));
 				}
 
 				Client_SendPacket(Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
@@ -585,7 +590,7 @@ Active_Poll()
 			}
 			else
 			{
-				printf("read buffer empty, errno set %d\n", errno);
+				printf(Neuro_s("read buffer empty, errno set %d\n", errno));
 			}
 		}
 	}
@@ -597,7 +602,7 @@ int
 Active_Init(char *username, char *password)
 {
 
-	NEURO_TRACE("Active Client initialization", NULL);
+	TRACE("Active Client initialization");
 
 	pktbuf = Packet_Create();
 

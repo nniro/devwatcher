@@ -7,17 +7,20 @@
 
 #include <neuro/NEURO.h>
 #include <neuro/network.h>
+#include <neuro/packet.h>
 
 #include <signal.h> /* signal */
 
+#include <stdlib.h>
 #include <stdio.h> /* printf */
+#include <string.h> /* memcpy */
 
 /*-------------------- Local Headers Including ---------------------*/
 
 #include "main.h" /* Main_Exit */
 
 #include "core.h"
-#include "packet.h"
+#include "pktAsm.h"
 
 #include "passive_client.h"
 #include "active_client.h"
@@ -40,6 +43,8 @@ static NNET_SLAVE *client;
 
 static Packet *pktbuf;
 
+static PktAsm *pa;
+
 /* time left until we send an alive packet type */
 static t_tick alive_time; 
 
@@ -57,11 +62,25 @@ clean_program(int dummy)
 	Main_Exit();
 }
 
+static int
+packetGetSize(const char *data)
+{
+	Pkt_Header *whole;
+
+        whole = (Pkt_Header*)data;
+
+	return whole->size;
+}
+
 /*-------------------- Global Functions ----------------------------*/
 
 void
-Client_SendPacket(const char *data, u32 len)
+Client_SendPacket(char *data, u32 len)
 {
+	Pkt_Header *buf = (Pkt_Header*)data;
+
+	memcpy(&buf->size, &len, sizeof(u32));
+
 	/*NEURO_TRACE("sending %s", Neuro_s("packet len %d \'%s\'", len, data));*/
 	NNet_Send(client, data, len);
 }
@@ -155,7 +174,7 @@ Client_Poll(NNET_STATUS *status)
 
 		default:
 		{
-			NEURO_ERROR("unknown status %d", NNet_GetStatus(status));
+			ERROR(Neuro_s("unknown status %d", NNet_GetStatus(status)));
 			return 1;
 		}
 		break;
@@ -170,8 +189,9 @@ Client_Poll(NNET_STATUS *status)
 		Packet_Reset(pktbuf);
 
 		Packet_Push32(pktbuf, NET_ALIVE);
+		Packet_Push32(pktbuf, 0);
 
-		NNet_Send(client, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
+		Client_SendPacket(Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
 	}
 	return _err;
 }
@@ -184,15 +204,54 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 	Pkt_Header *whole;
 	void *buffer;
 
+	char *newData = NULL;
+	int newLen = 0;
+	char *nextData = NULL;
+	int nextLen = 0;
+	int handleNextData = 0;
+
 	/* NEURO_TRACE("recieved packet len %d", len); */
 
 	if (len <= 0 || !data)
 	{
-		NEURO_WARN("Invalid packet recieved", NULL);
+		WARN("Invalid packet recieved");
 		return 1;
 	}
 
-	whole = (Pkt_Header*)data;
+	{
+		int _err = 0;
+
+		_err = PktAsm_Process(pa, packetGetSize, (char*)data, len, &newData, &newLen, &nextData, &nextLen);
+
+		switch (_err)
+		{
+			case 0:
+			{
+				return 0;
+			}
+			break;
+
+			case 1:
+			{
+			}
+			break;
+
+			case 2:
+			{
+				handleNextData = 1;
+			}
+			break;
+
+			default:
+			{
+				ERROR("PktAsm_Process : unrecoverable error");
+				return 1;
+			}
+			break;
+		}
+	}
+
+	whole = (Pkt_Header*)newData;
 
 	buffer = &whole[1];
 
@@ -204,9 +263,9 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 			int *length;
 			int total = 0;
 
-			if (Client_IsValidPacket(data, len) == 0)
+			if (Client_IsValidPacket(newData, newLen) == 0)
 			{
-				NEURO_WARN("Invalid packet recieved", NULL);
+				WARN("Invalid packet recieved");
 			}
 
 			length = buffer;
@@ -228,11 +287,11 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 
 			if (tmp->access == 0)
 			{
-				NEURO_TRACE("Server access denied", NULL);
+				TRACE("Server access denied");
 				return 1;
 			}
 
-			if (len >= sizeof(Pkt_WSize))
+			if (newLen >= sizeof(Pkt_WSize))
 			{
 				cols = tmp->cols;
 				rows = tmp->rows;
@@ -273,18 +332,23 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 
 			buf = buffer;
 
-			printf("Active client %s -- Sessions %d\n", buf->name, buf->layers);
+			printf(Neuro_s("Active client %s -- Sessions %d\n", buf->name, buf->layers));
 		}
 		break;
 
 		default:
 		{
-			NEURO_WARN("Unhandled packet type recieved -- type %d", whole->type);
+			WARN(Neuro_s("Unhandled packet type recieved -- type %d", whole->type));
 		}
 		break;
 	}
 
 	Packet_Reset(pktbuf);
+
+	if (handleNextData)
+	{
+		return packet_handler(conn, nextData, nextLen);
+	}
 
 	return 0;
 }
@@ -297,7 +361,7 @@ Client_Init(NNET_MASTER *master, char *username, char *password, char *host, int
 	client = NNet_Connect(master, host, port);
 	if(!client)
 	{
-                NEURO_ERROR("failed to connect", NULL);
+                ERROR("failed to connect");
                 return 1;
 	}
 
@@ -324,6 +388,7 @@ Client_Init(NNET_MASTER *master, char *username, char *password, char *host, int
 	/* NNet_SetTimeout(client, 0); */
 
 	pktbuf = Packet_Create();
+	pa = PktAsm_Create();
 
 	return 0;
 }
@@ -332,6 +397,7 @@ void
 Client_Clean()
 {
 	Packet_Destroy(pktbuf);
+	PktAsm_Destroy(pa);
 
 	if (client_active == 1)
 		Active_Clean();

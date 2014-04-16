@@ -8,7 +8,7 @@ platform=unix
 BINARY=dwatcher
 FLAGS= -Wall -std=iso9899:1990 -pedantic -g
 LIBS= -lneuro -lm -lneuronet
-OBJECTS= main.o packet.o core.o server.o client.o
+OBJECTS= main.o pktAsm.o core.o server.o client.o
 GCC=gcc
 
 FLAGS += -DVERSION="\"$(MAJOR).$(MINOR).$(MICRO)\""

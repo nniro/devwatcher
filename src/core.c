@@ -56,7 +56,7 @@ Core_Poll()
 
 	if (!status)
 	{
-		NEURO_ERROR("Status is NULL", NULL);
+		ERROR("Status is NULL");
 		return 1;
 	}
 
@@ -84,13 +84,13 @@ Core_Init()
 		master = NNet_Create(TYPE_CLIENT);
 
 		/* we are a client */
-		NEURO_TRACE("We are a client %d", Main_GetClientType());
+		TRACE(Neuro_s("We are a client %d", Main_GetClientType()));
 
 		if (name == NULL)
 		{
 			name = getenv("USER");
 
-			NEURO_TRACE("Connecting as user %s\n", name);
+			TRACE(Neuro_s("Connecting as user %s\n", name));
 		}
 
 		if (Client_Init(master, name, Main_GetPassword(), 
@@ -108,14 +108,14 @@ Core_Init()
 	{
 		if (Main_GetClientType())
 		{
-			NEURO_ERROR("	To act as an active client, you need to input\n\
+			ERROR("	To act as an active client, you need to input\n\
 						the IP address of a running server and\n\
-						also optionally a password.", NULL);
+						also optionally a password.");
 			return 1;
 		}
 
 		/* we are a server */
-		NEURO_TRACE("We are a server", NULL);
+		TRACE("We are a server");
 
 		master = NNet_Create(TYPE_SERVER);
 

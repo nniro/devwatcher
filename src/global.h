@@ -36,6 +36,7 @@ typedef struct Pkt_Header Pkt_Header;
 struct Pkt_Header
 {
 	u32 type; /* the packet type */
+	u32 size; /* packet size */
 };
 
 typedef struct Pkt_Connect Pkt_Connect;

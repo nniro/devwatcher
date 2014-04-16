@@ -6,6 +6,7 @@
 /*-------------------- Extern Headers Including --------------------*/
 
 #include <neuro/NEURO.h>
+#include <neuro/packet.h>
 #include <string.h> /* memset strncpy */
 
 #include <unistd.h> /* write */
@@ -18,7 +19,6 @@
 /*-------------------- Local Headers Including ---------------------*/
 
 #include "core.h"
-#include "packet.h"
 #include "client.h"
 
 /*-------------------- Main Module Header --------------------------*/
@@ -59,6 +59,7 @@ SendConnect(char *username, u32 layer, int client_type)
 	Packet_Reset(pktbuf);
 
 	Packet_Push32(pktbuf, NET_CONNECT);
+	Packet_Push32(pktbuf, 0);
 	Packet_PushStruct(pktbuf, sizeof(Pkt_Connect), &connect);
 
 	Client_SendPacket(Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
@@ -85,7 +86,7 @@ Passive_SetScreenSize(int cols, int rows)
 {
 	/*struct winsize wsize = {37,100,0,0};*/
 
-	NEURO_TRACE("Debug %s", Neuro_s("Screen size %dx%d", cols, rows));
+	TRACE(Neuro_s("Debug Screen size %dx%d", cols, rows));
 
 	/* ioctl(0, TIOCSWINSZ, (char*)&wsize);*/
 }
@@ -104,7 +105,7 @@ Passive_Init(char *username, int layer)
 {
 	pktbuf = Packet_Create();
 
-	NEURO_TRACE("Passive Client Init", NULL);
+	TRACE("Passive Client Init");
 
 	{
 		log = fopen("log_file2", "w");
@@ -120,8 +121,9 @@ Passive_Init(char *username, int layer)
 		 * currently on the server. 
 		 */
 		Packet_Push32(pktbuf, NET_QLIST);
+		Packet_Push32(pktbuf, 0);
 
-		NEURO_TRACE("sending packet %d", Packet_GetLen(pktbuf));
+		TRACE(Neuro_s("sending packet %d", Packet_GetLen(pktbuf)));
 
 		Client_SendPacket(Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
 

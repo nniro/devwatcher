@@ -110,7 +110,7 @@ outputhelp(char *data)
 static void
 outputversion(char *data)
 {
-	printf("dwatcher (developers watcher) %s\n", VERSION);
+	printf(Neuro_s("dwatcher (developers watcher) %s\n", VERSION));
 	printf("Written by Nicholas Niro\n\n");
 	printf("Copyright (C) 2007 Neuroponic, Inc.\n");
 	printf("This is free software; see the source for copying conditions. There is NO\n");
@@ -123,7 +123,7 @@ init_modules()
 
 	if (Core_Init())
 	{
-		NEURO_ERROR("Initialisation of the Core module, failed", NULL);
+		ERROR("Initialisation of the Core module, failed");
 		return 1;
 	}
 
@@ -236,7 +236,7 @@ int main(int argc, char **argv)
 			
 			main_loop();
 
-			NEURO_TRACE("CLEANING MODULES", 0);
+			TRACE(Neuro_s("CLEANING MODULES", 0));
 			clean_modules();
 		}
 		break;

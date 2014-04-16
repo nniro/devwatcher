@@ -8,7 +8,7 @@
 
 #include "global.h"
 
-extern void Client_SendPacket(const char *data, u32 len);
+extern void Client_SendPacket(char *data, u32 len);
 
 extern int Client_IsValidPacket(const char *data, u32 len);
 
