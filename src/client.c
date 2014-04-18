@@ -293,6 +293,8 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 			Pkt_Info *tmp;
 			int cols = 0, rows = 0;
 
+			TRACE("NET_INFO packet received");
+
 			tmp = (Pkt_Info*)buffer;
 
 			if (tmp->access == 0)
@@ -314,6 +316,7 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 
 			if (client_active == 1)
 			{
+				TRACE("Starting Active Session");
 				Active_SendWSize();
 				Active_StartSession();
 			}
@@ -342,7 +345,7 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 
 			buf = buffer;
 
-			printf(Neuro_s("Active client %s -- Sessions %d\n", buf->name, buf->layers));
+			printf(Neuro_s("Active client %s -- Session Layer #%d\n", buf->name, buf->layers));
 		}
 		break;
 
