@@ -98,7 +98,7 @@ finish(int dummy)
 	register int pid;
 	register int die = 0;
 
-	TRACE("CATCHED SIGNAL SIGCHLD");
+	TRACE(Neuro_s("Pid %d -- CATCHED SIGNAL SIGCHLD", getpid()));
 
 	while ((pid = wait3(&status, WNOHANG, 0)) > 0)
 	{
@@ -107,7 +107,7 @@ finish(int dummy)
 	}
 
 	printf(Neuro_s("pid %d ppid %d child %d exit status %d\r\n", getpid(), getppid(), child, status));
-	TRACE(Neuro_s("SIGCHLD %d", pid));
+	TRACE(Neuro_s("Pid %d -- SIGCHLD %d", getpid(), pid));
 	if (die)
 	{
 		done();
@@ -419,7 +419,8 @@ Active_StartSession()
 				subchild = child = fork();
 
 				/* printf("CHILD3 %d\n", getpid()); */
-				TRACE(Neuro_s("PTY size : row %d col %d", 
+				TRACE(Neuro_s("Process %d -- PTY size : row %d col %d", 
+					getpid(),
 					mpty->wsize.ws_row, 
 					mpty->wsize.ws_col));
 				if (child == 0)

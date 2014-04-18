@@ -236,7 +236,7 @@ int main(int argc, char **argv)
 			
 			main_loop();
 
-			TRACE(Neuro_s("CLEANING MODULES", 0));
+			TRACE(Neuro_s("Process %d -- CLEANING MODULES", getpid()));
 			clean_modules();
 		}
 		break;
