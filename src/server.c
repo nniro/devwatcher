@@ -381,6 +381,7 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 		{
 			case 0:
 			{
+				TRACE("PktAsm_Process -- needs more data");
 				return 0;
 			}
 			break;
@@ -392,6 +393,7 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 
 			case 2:
 			{
+				TRACE("PktAsm_Process -- There is more data than expected in the packet");
 				handleNextData = 1;
 			}
 			break;
@@ -663,7 +665,10 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 								NNet_SetData(conn, current);
 							}
 							else
+							{
+								TRACE(Neuro_s("The Client tried to access a currently inactive session %d", connect->layer));
 								_err += 1;
+							}
 						}
 						else
 						{
