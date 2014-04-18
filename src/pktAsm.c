@@ -25,13 +25,24 @@ NEURO_MODULE_CHANNEL("pktAsm");
 
 struct PktAsm
 {
-	char *data;
-	int curSize;
-	int totalSize;
+	char *data; /* the buffer containing the packet in making */
 
-	/* memory available in data */
+	int curSize; /* the current size of the data that we gathered so far. */
+	int totalSize; /* the size the packet has to be at the end, when we got
+			* all its pieces.
+       			*/
+
+	/* the goal is to attain curSize == totalSize */
+
+	/* when bytes are copied to the buffer data, this variable 
+	 * contains how much memory is left free in data.
+	 *
+	 */
 	int mem;
-	/* the size of the memory in data */
+	/* the total allocated bytes available in the buffer data
+	 *
+	 * FIXME Can't we deduce this by doing mem + totalSize?
+	 */
 	int totalMem;
 };
 
@@ -47,6 +58,18 @@ struct PktAsm
 
 /*-------------------- Global Functions ----------------------------*/
 
+void
+PktAsm_Reset(PktAsm *pa)
+{
+	if (!pa)
+		return;
+
+	pa->curSize = 0;
+	pa->totalSize = 0;
+
+	pa->mem = pa->totalMem;
+}
+
 /* 
  * returns -1 on error
  * returns 0 if need to feed more data
@@ -54,13 +77,14 @@ struct PktAsm
  * 			have any outputRemainData or outputRemainLen
  * returns 2 if it finished processing the current packet but has
  * 			more in outputRemainData and outputRemainLen
+ * returns 3 if it couldn't do anything and returned nothing.
  *
  * outputRemainData has to be checked if not NULL everytime and outputRemainLen
  * if they aren't NULL, it means a new packet was started so PktAsm_Push has
  * to be called with those new information.
  */
 int
-PktAsm_Process(PktAsm *pa, int (*getPacketSize)(const char *data), char *data, int len, char **outputData, int *outputTotalSize, char **outputRemainData, int *outputRemainLen)
+PktAsm_Process(PktAsm *pa, int (*getPacketSize)(const char *data), const char *data, int len, char **outputData, int *outputTotalSize, char **outputRemainData, int *outputRemainLen)
 {
 	/*
 	 * len == 100
@@ -88,8 +112,11 @@ PktAsm_Process(PktAsm *pa, int (*getPacketSize)(const char *data), char *data, i
 		return -1;
 	}
 
+	if (pa->curSize == pa->totalSize && pa->totalSize > 0)
+		return 1; /* the packet is a whole already */
+
 	if (len == 0)
-		return 1;
+		return 3; /* can't do anything */
 
 	/* TRACE(Neuro_s("Got packet of length : %d (cur %d, total %d)", len, pa->curSize, pa->totalSize)); */
 
@@ -102,12 +129,18 @@ PktAsm_Process(PktAsm *pa, int (*getPacketSize)(const char *data), char *data, i
 
 		if (!getPacketSize)
 		{
+			/* there is no method to know the size of the packet
+			 * so we assume that the first 4 bytes of the string is the
+			 * size of the packet.
+			 */
+
 			if (len < sizeof(int))
 			{
 				ERROR("Invalid packet not having a correct header with the size");
 				return -1;
 			}
 
+			/* we copy the first 4 bytes to the totalSize */
 			memcpy(&pa->totalSize, data, sizeof(int));
 
 			if (pa->totalSize < 0)
@@ -118,12 +151,18 @@ PktAsm_Process(PktAsm *pa, int (*getPacketSize)(const char *data), char *data, i
 
 			/* TRACE(Neuro_s("Packet header size %d", pa->totalSize)); */
 
+			/* we move the pointer past the first integer (the size) */
 			data = &data[sizeof(int)];
 
+			/* we remove the integer size from the length */
 			len -= sizeof(int);
+
+			TRACE(Neuro_s("without the callback getPacketSize, totalSize = %d", pa->totalSize));
 		}
 		else
+		{
 			pa->totalSize = (getPacketSize)(data);
+		}
 
 		TRACE(Neuro_s("Packet assembly process, packet len %d, header packet size %d", len, pa->totalSize));
 
@@ -136,13 +175,11 @@ PktAsm_Process(PktAsm *pa, int (*getPacketSize)(const char *data), char *data, i
 		if (pa->totalSize == 0)
 			return -1;
 
-		/*
-		if (pa->totalSize < len)
-		{
-			ERROR("This packet may be an attempt to forge a packet");
-			return -1;
-		}
-		*/
+		TRACE(Neuro_s("Starting to assemble a new packet of size %d", pa->totalSize));
+	}
+	else
+	{
+		TRACE(Neuro_s("Continuing packet at : %d/%d with new len %d", pa->curSize, pa->totalSize, len));
 	}
 
 	if (len > pa->totalSize - pa->curSize)

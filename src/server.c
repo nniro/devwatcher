@@ -83,7 +83,7 @@ static EBUF *client_list; /* CList */
 
 static Packet *pktbuf;
 
-static PktAsm *pa;
+static PktAsm *pktAsmCtx;
 
 /* main server password */
 static char *server_password;
@@ -375,7 +375,7 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 	{
 		int _err = 0;
 
-		_err = PktAsm_Process(pa, packetGetSize, (char*)data, len, &newData, &newLen, &nextData, &nextLen);
+		_err = PktAsm_Process(pktAsmCtx, packetGetSize, (char*)data, len, &newData, &newLen, &nextData, &nextLen);
 
 		switch (_err)
 		{
@@ -388,13 +388,26 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 
 			case 1:
 			{
+				TRACE("PktAsm_Process -- successfully reassembled a packet");
+				whole = (Pkt_Header*)newData;
+				len = newLen;
+				PktAsm_Reset(pktAsmCtx);
 			}
 			break;
 
 			case 2:
 			{
-				TRACE("PktAsm_Process -- There is more data than expected in the packet");
+				TRACE("PktAsm_Process -- successfully assembled a packet and there is more data in the packet");
 				handleNextData = 1;
+				whole = (Pkt_Header*)newData;
+				len = newLen;
+				PktAsm_Reset(pktAsmCtx);
+			}
+			break;
+
+			case 3:
+			{
+				/* PktAsm_Process couldn't do anything with the data */
 			}
 			break;
 
@@ -408,7 +421,6 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 		}
 	}
 
-        whole = (Pkt_Header*)data;
 
 	buffer = &whole[1];
 
@@ -867,7 +879,7 @@ Server_Init(NNET_MASTER *master, char *password, int port)
 	Neuro_SetcallbEBuf(client_list, clean_clist);
 
 	pktbuf = Packet_Create();
-	pa = PktAsm_Create();
+	pktAsmCtx = PktAsm_Create();
 
 	if (password)
 		server_password = password;
@@ -881,7 +893,7 @@ void
 Server_Clean()
 {
 	Packet_Destroy(pktbuf);
-	PktAsm_Destroy(pa);
+	PktAsm_Destroy(pktAsmCtx);
 
 	Neuro_CleanEBuf(&client_list);
 }

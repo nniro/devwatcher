@@ -46,7 +46,7 @@ static NNET_SLAVE *client;
 
 static Packet *pktbuf;
 
-static PktAsm *pa;
+static PktAsm *pktAsmCtx;
 
 /* time left until we send an alive packet type */
 static t_tick alive_time; 
@@ -231,24 +231,39 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 	{
 		int _err = 0;
 
-		_err = PktAsm_Process(pa, packetGetSize, (char*)data, len, &newData, &newLen, &nextData, &nextLen);
+		_err = PktAsm_Process(pktAsmCtx, packetGetSize, (char*)data, len, &newData, &newLen, &nextData, &nextLen);
 
 		switch (_err)
 		{
 			case 0:
 			{
+				/* needs more data */
 				return 0;
 			}
 			break;
 
 			case 1:
 			{
+				/* successfully scavenged a new packet */
+				whole = (Pkt_Header*)newData;
+				len = newLen;
+				PktAsm_Reset(pktAsmCtx);
 			}
 			break;
 
 			case 2:
 			{
+				/* successfully scavenged a new packet and got more data available */
 				handleNextData = 1;
+				whole = (Pkt_Header*)newData;
+				len = newLen;
+				PktAsm_Reset(pktAsmCtx);
+			}
+			break;
+
+			case 3:
+			{
+				/* could not do anything with the data. */
 			}
 			break;
 
@@ -261,7 +276,6 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 		}
 	}
 
-	whole = (Pkt_Header*)newData;
 
 	buffer = &whole[1];
 
@@ -401,7 +415,7 @@ Client_Init(NNET_MASTER *master, char *username, char *password, char *host, int
 	/* NNet_SetTimeout(client, 0); */
 
 	pktbuf = Packet_Create();
-	pa = PktAsm_Create();
+	pktAsmCtx = PktAsm_Create();
 
 	return 0;
 }
@@ -410,7 +424,7 @@ void
 Client_Clean()
 {
 	Packet_Destroy(pktbuf);
-	PktAsm_Destroy(pa);
+	PktAsm_Destroy(pktAsmCtx);
 
 	if (client_active == 1)
 		Active_Clean();
