@@ -512,10 +512,9 @@ Active_Poll()
 
 			Packet_Reset(pktbuf);
 
-			TRACE(Neuro_s("Sending a packet NET_DATA of %d bytes, checksum %s", c, sha1sum(buf, c, NULL)));
+			TRACE(Neuro_s("Sending a packet NET_DATA of %d bytes, checksum %s", c, sha1sum((const unsigned char*)buf, c, NULL)));
 			Packet_Push32(pktbuf, NET_DATA);
-			Packet_Push32(pktbuf, 0);
-			Packet_Push32(pktbuf, c);
+			Packet_Push32(pktbuf, 0); /* Client_SendPacket sets the size of the packet */
 			Packet_PushString(pktbuf, c, buf);
 
 			Client_SendPacket(Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
