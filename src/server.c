@@ -166,7 +166,15 @@ Broadcast_data(EBUF *listen, const char *data, u32 len)
 		if (len >= 512)
 			WARN(Neuro_s("Broadcast Packet Bigger than 511 : %d", len));
 
-		Server_SendPacket(buf->client, data, len);
+		Packet_Reset(pktbuf);
+
+		Packet_Push32(pktbuf, NET_DATA);
+		Packet_Push32(pktbuf, 0);
+		Packet_PushString(pktbuf, len, data);
+
+		Server_SendPacket(buf->client, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
+
+		Packet_Reset(pktbuf);
 	}
 }
 
@@ -425,6 +433,7 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 
 
 	buffer = &whole[1];
+	len -= 8;
 
 	/* NEURO_TRACE("Packet recieved, len %d", len); */
 
@@ -832,7 +841,7 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 			{
 				buf = Neuro_GiveEBuf(client_list, total);
 				
-				if (Handle_Session(buf, conn, data, len))
+				if (Handle_Session(buf, conn, buffer, len))
 					break;
 			}
 		}
