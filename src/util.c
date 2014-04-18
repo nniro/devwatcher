@@ -67,7 +67,7 @@ sha1sum(const unsigned char *input, int len, unsigned char *mOutput)
 		}
 		else
 			t = raw[i];
-		sprintf((char*)&output[j], "%2x", t);
+		sprintf((char*)&output[j], "%02x", t);
 		j += 2;
 		i++;
 	}
