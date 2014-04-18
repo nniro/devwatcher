@@ -198,9 +198,11 @@ PktAsm_Process(PktAsm *pa, int (*getPacketSize)(const char *data), const char *d
 
 	if (pa->mem < tmpLen)
 	{
-		pa->data = realloc(pa->data, tmpLen + (pa->totalMem + (sizeof(char) * MEMOVERHEAD)));
-		pa->mem = tmpLen + (sizeof(char) * MEMOVERHEAD);
-		pa->totalMem += pa->mem;
+		pa->data = realloc(pa->data, (tmpLen - pa->mem) + (pa->totalMem + (sizeof(char) * MEMOVERHEAD)));
+		pa->totalMem = (tmpLen - pa->mem) + (pa->totalMem + (sizeof(char) * MEMOVERHEAD));
+		pa->mem += (tmpLen - pa->mem) + (sizeof(char) * MEMOVERHEAD);
+		/*pa->mem = tmpLen + (sizeof(char) * MEMOVERHEAD);*/
+		/* pa->totalMem += pa->mem; */
 	}
 
 	memcpy(&pa->data[pa->curSize], data, tmpLen);
