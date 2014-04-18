@@ -159,8 +159,15 @@ Client_Poll(NNET_STATUS *status)
 		}
 		break;
 
+		case State_Disconnect:
+		{
+			TRACE("Internal Quit flagged, leaving");
+			return 1;
+		}
+
 		case State_ClientDisconnect:
 		{
+			TRACE("Disconnect order by the server, leaving");
 			/* closing the server */
 			return 1;
 		}
