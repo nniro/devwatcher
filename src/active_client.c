@@ -328,6 +328,10 @@ doshell()
 	
 	execl("/bin/bash", "bash", "-i", 0);
 
+	/* Normally, this part, after execl is never ran.
+	 * It may only be ran if there is an error in execl.
+	 */ 
+
 	perror("/bin/bash");
 	
 	kill(0, SIGTERM);

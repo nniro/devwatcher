@@ -1,6 +1,9 @@
 /* client.c
  * Module : Client_
  *
+ * Need to create a function which will make all the thread close
+ * down. This can then be used on error or what not to make sure
+ * there are no left forks running as "zombies".
  */
 
 /*-------------------- Extern Headers Including --------------------*/
