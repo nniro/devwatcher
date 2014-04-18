@@ -84,69 +84,9 @@ Client_SendPacket(char *data, u32 len)
 
 	memcpy(&buf->size, &len, sizeof(u32));
 
-	/*NEURO_TRACE("sending %s", Neuro_s("packet len %d \'%s\'", len, data));*/
+	TRACE(Neuro_s("Sending Packet : len %d ", len));
 	NNet_Send(client, data, len);
 }
-
-/* 
- * return 1 if the packet is valid and 0 if not 
- */
-int
-Client_IsValidPacket(const char *data, u32 len)
-{
-	Pkt_Header *whole;
-	void *buffer;
-
-	whole = (Pkt_Header*)data;
-
-	buffer = &whole[1];
-
-	switch (whole->type)
-	{
-		case NET_DATA:
-		{
-			int *length;
-			int total = 0;
-			char *buf = NULL;
-
-			length = buffer;
-			buf = (char*)&length[1];
-
-			total = *length;
-			total += 4 + 4;
-
-			if ((len - total) >= total)
-			{
-				return Client_IsValidPacket(&buf[*length], len - total);
-			}
-		}
-		break;
-
-		case NET_ALIVE:
-		{
-		}
-		break;
-
-		case NET_DISCONNECT:
-		{
-		}
-		break;
-
-		case NET_LIST:
-		{
-		}
-		break;
-
-		default:
-		{
-			return 0;
-		}
-		break;
-	}
-
-	return 1;
-}
-
 
 /*-------------------- Poll -------------------------*/
 
@@ -283,22 +223,8 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 	{
 		case NET_DATA:
 		{
-			char *buf;
-			int *length;
-			int total = 0;
-
-			if (Client_IsValidPacket(newData, newLen) == 0)
-			{
-				WARN("Invalid packet recieved");
-			}
-
-			length = buffer;
-			buf = (char*)&length[1];
-
-			total = *length;
-			total += 4 + 4;
-
-			Passive_HandleData(buf, *length);
+			/* we remove the length of the header variables */
+			Passive_HandleData(buffer, whole->size - 8);
 		}
 		break;
 
