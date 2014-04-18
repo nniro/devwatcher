@@ -186,7 +186,7 @@ PktAsm_Process(PktAsm *pa, int (*getPacketSize)(const char *data), const char *d
 	{
 		/* we have another packet in this */
 		*outputRemainLen = len - (pa->totalSize - pa->curSize);
-		*outputRemainData = &data[pa->totalSize];
+		*outputRemainData = &data[pa->totalSize - pa->curSize];
 
 		tmpLen = pa->totalSize - pa->curSize;
 
