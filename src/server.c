@@ -25,6 +25,8 @@
 
 #include "main.h" /* Main_Exit() */
 
+#include "util.h"
+
 /*-------------------- Main Module Header --------------------------*/
 
 #include "server.h"
@@ -788,6 +790,8 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 			u32 total = 0;
 			CList *buf;
 			Session *session;
+
+			TRACE(Neuro_s("Got NET_DATA len %d, checksum %s", len, sha1sum(buffer, len, NULL)));
 
 			buf = NNet_GetData(conn);
 

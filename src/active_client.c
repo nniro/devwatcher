@@ -34,6 +34,8 @@
 #include "main.h"
 #include "core.h"
 
+#include "util.h"
+
 /*-------------------- Main Module Header --------------------------*/
 
 #include "client.h"
@@ -510,6 +512,7 @@ Active_Poll()
 
 			Packet_Reset(pktbuf);
 
+			TRACE(Neuro_s("Sending a packet NET_DATA of %d bytes, checksum %s", c, sha1sum(buf, c, NULL)));
 			Packet_Push32(pktbuf, NET_DATA);
 			Packet_Push32(pktbuf, 0);
 			Packet_Push32(pktbuf, c);
