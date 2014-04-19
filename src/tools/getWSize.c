@@ -14,9 +14,9 @@ int main()
 	ioctl(0, TIOCGWINSZ, &wsize);
 
 
-	printf("PTY size : row %d col %d pixels : %dx%d\n"
-		,wsize.ws_row 
+	printf("PTY size : col %d row %d pixels : %dx%d\n"
 		,wsize.ws_col
+		,wsize.ws_row 
 		,wsize.ws_xpixel
 		,wsize.ws_ypixel
 		);

@@ -425,10 +425,10 @@ Active_StartSession()
 				subchild = child = fork();
 
 				/* printf("CHILD3 %d\n", getpid()); */
-				TRACE(Neuro_s("Process %d -- PTY size : row %d col %d", 
+				TRACE(Neuro_s("Process %d -- PTY size : col %d row %d", 
 					getpid(),
-					mpty->wsize.ws_row, 
-					mpty->wsize.ws_col));
+					mpty->wsize.ws_col,
+					mpty->wsize.ws_row));
 				if (child == 0)
 					doshell();
 				else

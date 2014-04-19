@@ -26,9 +26,9 @@ int main()
 	/* environment variables : TERM */
 	term = getenv("TERM");
 
-	printf("trying to set PTY to size : row %d col %d pixels : %dx%d\n"
-		,wsize.ws_row 
+	printf("trying to set PTY to size : col %d row %d pixels : %dx%d\n"
 		,wsize.ws_col
+		,wsize.ws_row 
 		,wsize.ws_xpixel
 		,wsize.ws_ypixel
 		);
@@ -40,9 +40,9 @@ int main()
 	/* we fetch the window size for the current pty */
 	ioctl(0, TIOCGWINSZ, &wsize);
 
-	printf("PTY result -- size : row %d col %d pixels : %dx%d\n"
-		,wsize.ws_row 
+	printf("PTY result -- size : col %d row %d pixels : %dx%d\n"
 		,wsize.ws_col
+		,wsize.ws_row 
 		,wsize.ws_xpixel
 		,wsize.ws_ypixel
 		);
