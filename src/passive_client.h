@@ -9,6 +9,8 @@
 
 extern void Passive_HandleData(const char *data, u32 len);
 
+extern void Passive_SetScreenSize(int cols, int rows);
+
 extern void Passive_Poll();
 
 extern int Passive_Init(char *username, int layer);
