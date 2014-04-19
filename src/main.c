@@ -5,7 +5,10 @@
 /*-------------------- Extern Headers Including --------------------*/
 #include <neuro/NEURO.h>
 #include <neuro/network.h> /* NNet_SetDebugFilter() */
+
+#include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h> /* getpid */
 
 /*-------------------- Local Headers Including ---------------------*/
 #include "core.h"
