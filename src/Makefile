@@ -28,7 +28,7 @@ endif
 ALL: $(BINARY)
 
 $(BINARY): $(OBJECTS)
-	$(GCC) $(FLAGS) $(LIBS) $(OBJECTS) -o $(BINARY)
+	$(GCC) $(FLAGS) $(OBJECTS) $(LIBS) -o $(BINARY)
 	
 %.o : %.c
 	$(GCC) $(FLAGS) -c $<
