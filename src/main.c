@@ -43,7 +43,7 @@ static int LAYER = 0;
 /*-------------------- Static Functions ----------------------------*/
 
 static void
-toconnect(char *data)
+toconnect(void *c, char *data)
 {
 	if (data)
 	{
@@ -52,7 +52,7 @@ toconnect(char *data)
 }
 
 static void
-set_port(char *data)
+set_port(void *c, char *data)
 {
 	if (data)
 	{
@@ -61,7 +61,7 @@ set_port(char *data)
 }
 
 static void
-set_name(char *data)
+set_name(void *c, char *data)
 {
 	if (data)
 	{
@@ -70,20 +70,20 @@ set_name(char *data)
 }
 
 static void
-set_password(char *data)
+set_password(void *c, char *data)
 {
 	if (data)
 		PASSWORD = data;
 }
 
 static void
-set_client(char *data)
+set_client(void *c, char *data)
 {
 	CLIENT = 1;
 }
 
 static void
-set_layer(char *data)
+set_layer(void *c, char *data)
 {
 	if (data)
 	{
@@ -92,7 +92,7 @@ set_layer(char *data)
 }
 
 static void
-outputhelp(char *data)
+outputhelp(void *c, char *data)
 {
 	printf("Usage: dwatcher [OPTIONS]... [SERVER]\n");
 	printf("this program is a tool used to broadcast a shell to a server\n");
@@ -111,7 +111,7 @@ outputhelp(char *data)
 }
 
 static void
-outputversion(char *data)
+outputversion(void *c, char *data)
 {
 	printf(Neuro_s("dwatcher (developers watcher) %s\n", VERSION));
 	printf("Written by Nicholas Niro\n\n");
@@ -201,14 +201,14 @@ int main(int argc, char **argv)
 
 	Neuro_ArgInit(argc, argv);
 
-	Neuro_ArgOption("h,help", OPTION_QUIT, outputhelp);
-	Neuro_ArgOption("v,version", OPTION_NORMAL | OPTION_QUIT, outputversion);
-	Neuro_ArgOption(NULL, OPTION_NORMAL, toconnect);
-	Neuro_ArgOption("p,port", OPTION_ARGUMENT, set_port);
-	Neuro_ArgOption("n,name", OPTION_ARGUMENT, set_name);
-	Neuro_ArgOption("l,layer", OPTION_ARGUMENT, set_layer);
-	Neuro_ArgOption("s,password", OPTION_ARGUMENT, set_password);
-	Neuro_ArgOption("a,active", OPTION_NORMAL, set_client);
+	Neuro_ArgOption("h,help", OPTION_QUIT, NULL, outputhelp);
+	Neuro_ArgOption("v,version", OPTION_NORMAL | OPTION_QUIT, NULL, outputversion);
+	Neuro_ArgOption(NULL, OPTION_NORMAL, NULL, toconnect);
+	Neuro_ArgOption("p,port", OPTION_ARGUMENT, NULL, set_port);
+	Neuro_ArgOption("n,name", OPTION_ARGUMENT, NULL, set_name);
+	Neuro_ArgOption("l,layer", OPTION_ARGUMENT, NULL, set_layer);
+	Neuro_ArgOption("s,password", OPTION_ARGUMENT, NULL, set_password);
+	Neuro_ArgOption("a,active", OPTION_NORMAL, NULL, set_client);
 	/*
 	Neuro_ArgOption("s,summary", OPTION_NORMAL, set_summary);
 	Neuro_ArgOption("d,description", OPTION_NORMAL, set_description);
