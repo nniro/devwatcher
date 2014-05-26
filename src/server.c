@@ -48,6 +48,9 @@ struct CList
 	/* sessions (layers of active clients that a passive client can watch) */
 	/* active clients only */
 	EBUF *sessions; /* contains Session type of elements */
+
+	/* Packet reassembly context */
+	PktAsm *pktAsmCtx;
 };
 
 struct Session
@@ -85,8 +88,6 @@ static EBUF *client_list; /* CList */
 
 static Packet *pktbuf;
 
-static PktAsm *pktAsmCtx;
-
 /* main server password */
 static char *server_password;
 
@@ -120,6 +121,7 @@ clean_clist(void *src)
 	if (tmp)
 	{
 		Neuro_CleanEBuf(&tmp->sessions);
+		PktAsm_Destroy(tmp->pktAsmCtx);
 	}
 }
 
@@ -309,7 +311,17 @@ Server_Poll(NNET_STATUS *status)
 
 		case State_NewClient:
 		{
+			CList *buf;
+
 			TRACE(Neuro_s("New client connection %s", NNet_GetIP(NNet_GetSlave(status))));
+
+			Neuro_AllocEBuf(client_list, sizeof(CList*), sizeof(CList));
+
+			buf = Neuro_GiveCurEBuf(client_list);
+
+			buf->pktAsmCtx = PktAsm_Create();
+
+			NNet_SetData(NNet_GetSlave(status), buf);
 		}
 		break;
 
@@ -374,7 +386,9 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 	int nextLen = 0;
 	int handleNextData = 0;
 
-	/* NEURO_TRACE("recieved packet len %d", len); */
+	CList *cData;
+
+	TRACE(Neuro_s("recieved packet len %d", len));
 
 	if (len <= 0 || !data)
 	{
@@ -382,10 +396,13 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 		return 1;
 	}
 
+	cData = NNet_GetData(conn);
+
+	if (cData) /* otherwise it's probably a new client */
 	{
 		int _err = 0;
 
-		_err = PktAsm_Process(pktAsmCtx, packetGetSize, (char*)data, len, &newData, &newLen, &nextData, &nextLen);
+		_err = PktAsm_Process(cData->pktAsmCtx, packetGetSize, (char*)data, len, &newData, &newLen, &nextData, &nextLen);
 
 		switch (_err)
 		{
@@ -401,7 +418,7 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 				TRACE("PktAsm_Process -- successfully reassembled a packet");
 				whole = (Pkt_Header*)newData;
 				len = newLen;
-				PktAsm_Reset(pktAsmCtx);
+				PktAsm_Reset(cData->pktAsmCtx);
 			}
 			break;
 
@@ -411,7 +428,7 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 				handleNextData = 1;
 				whole = (Pkt_Header*)newData;
 				len = newLen;
-				PktAsm_Reset(pktAsmCtx);
+				PktAsm_Reset(cData->pktAsmCtx);
 			}
 			break;
 
@@ -589,19 +606,7 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 					Server_SendPacket(conn, Packet_GetBuffer(pktbuf), Packet_GetLen(pktbuf));
 				}
 
-				if (connect->name)
-				{
-					buf = NNet_GetData(conn);
-				}
-
-				if (!buf)
-				{
-					Neuro_AllocEBuf(client_list, sizeof(CList*), sizeof(CList));
-
-					buf = Neuro_GiveCurEBuf(client_list);
-
-					buf->client_type = connect->client_type;
-				}
+				buf = NNet_GetData(conn);
 
 				if (Neuro_EBufIsEmpty(buf->sessions))
 				{
@@ -623,8 +628,6 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 					strncpy(buf->name, connect->name, 32);
 					/* printf("Connection from client %s type %d\n", buf->name, buf->client_type); */
 				}
-
-				NNet_SetData(conn, buf);
 			}
 			else if (connect->client_type == 0) /* a passive client */
 			{
@@ -633,7 +636,6 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 
 				if (connect->name)
 				{
-					/*buf = NNet_GetData(conn);*/
 					buf = lookupCList(connect->name);
 				}
 				else
@@ -660,8 +662,8 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 							{
 								CList *current;
 
-								Neuro_AllocEBuf(client_list, sizeof(CList*), sizeof(CList));
-								current = Neuro_GiveCurEBuf(client_list);
+								current = NNet_GetData(conn);
+
 								current->client_type = connect->client_type;
 								current->audit = sess;
 
@@ -892,7 +894,6 @@ Server_Init(NNET_MASTER *master, char *password, int port)
 	Neuro_SetcallbEBuf(client_list, clean_clist);
 
 	pktbuf = Packet_Create();
-	pktAsmCtx = PktAsm_Create();
 
 	if (password)
 		server_password = password;
@@ -906,7 +907,6 @@ void
 Server_Clean()
 {
 	Packet_Destroy(pktbuf);
-	PktAsm_Destroy(pktAsmCtx);
 
 	Neuro_CleanEBuf(&client_list);
 }
