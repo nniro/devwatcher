@@ -319,6 +319,8 @@ Server_Poll(NNET_STATUS *status)
 
 			buf = Neuro_GiveCurEBuf(client_list);
 
+			buf->client_type == CTYPE_UNKNOWN;
+
 			buf->pktAsmCtx = PktAsm_Create();
 
 			NNet_SetData(NNet_GetSlave(status), buf);
@@ -343,7 +345,7 @@ Server_Poll(NNET_STATUS *status)
 
 				TRACE(Neuro_s("%s client disconnected", buf->client_type == 1 ? "Active" : "Passive"));
 
-				if (buf->client_type == 0) /* passive connection */
+				if (buf->client_type == CTYPE_PASSIVE) /* passive connection */
 				{
 					Listener *tmp = lookupListener(buf->audit->listeners, NNet_GetSlave(status));
 					Neuro_SCleanEBuf(buf->audit->listeners, tmp);
@@ -492,7 +494,7 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 			{
 				buf = Neuro_GiveEBuf(client_list, total);
 				
-				if (buf->client_type == 1)
+				if (buf->client_type == CTYPE_ACTIVE)
 				{
 					u32 amount = 0;
 
@@ -540,14 +542,14 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 
 			connect = buffer;
 
-			if (connect->client_type > 1)
+			if (connect->client_type != CTYPE_ACTIVE || connect->client_type != CTYPE_PASSIVE)
 			{
 				WARN("client has an unknown client type, dropping client");
 				NNet_DisconnectClient(conn);
 				return 0;
 			}
 
-			if (connect->client_type == 1) /* an active client */
+			if (connect->client_type == CTYPE_ACTIVE) /* an active client */
 			{
 				if (server_password)
 				{
@@ -629,7 +631,7 @@ packet_handler(NNET_SLAVE *conn, const char *data, u32 len)
 					/* printf("Connection from client %s type %d\n", buf->name, buf->client_type); */
 				}
 			}
-			else if (connect->client_type == 0) /* a passive client */
+			else if (connect->client_type == CTYPE_PASSIVE) /* a passive client */
 			{
 				int _err = 0;
 				CList *buf = NULL;

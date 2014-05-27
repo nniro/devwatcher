@@ -41,6 +41,13 @@ struct Pkt_Header
 
 typedef struct Pkt_Connect Pkt_Connect;
 
+enum client_types
+{
+	,CTYPE_PASSIVE /* Passive client */
+	,CTYPE_ACTIVE /* Active client */
+	,CTYPE_UNKNOWN /* Unknown client */
+};
+
 struct Pkt_Connect
 {
 	char name[32];
