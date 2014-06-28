@@ -43,7 +43,7 @@ typedef struct Pkt_Connect Pkt_Connect;
 
 enum client_types
 {
-	,CTYPE_PASSIVE /* Passive client */
+	CTYPE_PASSIVE /* Passive client */
 	,CTYPE_ACTIVE /* Active client */
 	,CTYPE_UNKNOWN /* Unknown client */
 };
