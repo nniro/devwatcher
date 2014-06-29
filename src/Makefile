@@ -3,10 +3,10 @@
 # valid values : unix w32
 platform=unix
 
-
+BINDIR:=../bin/
 OBJDIR:=../objs/
 
-BINARY=dwatcher
+BINARY=../bin/dwatcher
 CFLAGS += -Wall -std=iso9899:1990 -pedantic -g
 LIBS= -lneuro -lm -lneuronet -lcrypto
 CC ?=gcc
@@ -39,7 +39,9 @@ $(OBJDIR)%.o : %.c
 clean:
 	rm -f $(BINARY) *.o 
 	rm -rf $(OBJDIR)
+	rm -rf $(BINDIR)
 
 .PHONY: DIRS
 DIRS: 
 	mkdir -p $(OBJDIR)
+	mkdir -p $(BINDIR)
