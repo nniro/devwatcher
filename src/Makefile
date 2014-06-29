@@ -4,34 +4,42 @@
 platform=unix
 
 
+OBJDIR:=../objs/
 
 BINARY=dwatcher
-FLAGS= -Wall -std=iso9899:1990 -pedantic -g
+CFLAGS += -Wall -std=iso9899:1990 -pedantic -g
 LIBS= -lneuro -lm -lneuronet -lcrypto
-OBJECTS= util.o main.o pktAsm.o core.o server.o client.o
-GCC=gcc
+CC ?=gcc
 
 FLAGS += -DVERSION="\"$(MAJOR).$(MINOR).$(MICRO)\""
-
 
 ifeq ($(platform), w32)
 	platform=$(HOME)/cross
 
-	GCC=$(platform)/bin/gcc
-#	FLAGS += -L$(platform)/include -I$(platform)/include
+	CC=$(platform)/bin/gcc
+	CFLAGS += -L$(platform)/include -I$(platform)/include
 else
-	FLAGS += -DACTIVE_CLIENT_ENABLED=1
-	OBJECTS += active_client.o passive_client.o
+	CFLAGS += -DACTIVE_CLIENT_ENABLED=1
 	LIBS += -lutil
 endif
 
-ALL: $(BINARY)
+SRCS := $(wildcard *.cpp)
+SRCS := $(SRCS) $(wildcard *.c) 
+OBJS := $(patsubst %.cpp,$(OBJDIR)%.o,$(SRCS))
+OBJS := $(patsubst %.c,$(OBJDIR)%.o,$(OBJS))
 
-$(BINARY): $(OBJECTS)
-	$(GCC) $(FLAGS) $(OBJECTS) $(LIBS) -o $(BINARY)
+ALL: DIRS $(BINARY)
+
+$(BINARY): $(OBJS)
+	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS) $(LIBS) -o $(BINARY)
 	
-%.o : %.c
-	$(GCC) $(FLAGS) -c $<
+$(OBJDIR)%.o : %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(BINARY) *.o
+	rm -f $(BINARY) *.o 
+	rm -rf $(OBJDIR)
+
+.PHONY: DIRS
+DIRS: 
+	mkdir -p $(OBJDIR)
