@@ -35,7 +35,7 @@ static u8 running = 1;
 
 static char *NAME;
 static char *HOST;
-static int PORT = 9000;
+static int PORT = 9010;
 static char *PASSWORD;
 static int CLIENT = 0;
 static int LAYER = 0;
